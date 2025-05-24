@@ -1,0 +1,336 @@
+/**
+ * @file librift_integration.h
+ * @brief LibRift Ecosystem Integration for AST-Aware Bytecode System
+ * 
+ * This module defines the integration interfaces between the AST-Aware
+ * Bytecode System and the broader LibRift regex engine ecosystem,
+ * ensuring seamless interoperability and enhanced compilation capabilities.
+ * 
+ * @copyright Copyright (c) 2025 OBINexus Computing / LibRift Project
+ * @license MIT License (LibRift components) / Proprietary (AST-Aware components)
+ */
+
+#ifndef OBINEXUS_LIBRIFT_INTEGRATION_H
+#define OBINEXUS_LIBRIFT_INTEGRATION_H
+
+#include "ast_aware_system.h"
+#include "librift/core/automaton/automaton.h"
+#include "librift/core/parser/parser.h"
+#include "librift/core/runtime/matcher.h"
+#include <stdint.h>
+#include <stdbool.h>
+
+/**
+ * @brief LibRift integration modes
+ */
+typedef enum {
+    OBINEXUS_LIBRIFT_MODE_TRADITIONAL,    /**< Traditional LibRift compilation */
+    OBINEXUS_LIBRIFT_MODE_AST_AWARE,      /**< AST-Aware enhanced compilation */
+    OBINEXUS_LIBRIFT_MODE_HYBRID,         /**< Hybrid mode using both approaches */
+    OBINEXUS_LIBRIFT_MODE_FALLBACK        /**< AST-Aware with traditional fallback */
+} obinexus_librift_integration_mode_t;
+
+/**
+ * @brief LibRift AST adapter for AST-Aware system
+ */
+typedef struct obinexus_librift_ast_adapter {
+    /* LibRift AST integration */
+    rift_regex_ast_t *librift_ast;        /**< LibRift AST representation */
+    
+    /* AST-Aware system mapping */
+    void *ast_aware_representation;       /**< AST-Aware internal representation */
+    
+    /* Mapping information */
+    struct {
+        uint64_t *librift_node_ids;       /**< LibRift AST node identifiers */
+        uint64_t *ast_aware_node_ids;     /**< AST-Aware node identifiers */
+        size_t num_mappings;              /**< Number of node mappings */
+    } node_mapping;
+    
+    /* Semantic preservation tracking */
+    struct {
+        uint32_t mapping_confidence;      /**< Confidence in AST mapping */
+        bool semantics_preserved;         /**< Semantic preservation status */
+        char *mapping_report;             /**< Detailed mapping report */
+    } preservation_info;
+    
+} obinexus_librift_ast_adapter_t;
+
+/**
+ * @brief Enhanced LibRift pattern with AST-Aware capabilities
+ */
+typedef struct obinexus_enhanced_librift_pattern {
+    /* Traditional LibRift components */
+    rift_regex_pattern_t *librift_pattern;     /**< Original LibRift pattern */
+    rift_regex_automaton_t *librift_automaton; /**< LibRift automaton */
+    
+    /* AST-Aware enhancements */
+    obinexus_ast_aware_bytecode_t *ast_aware_bytecode; /**< AST-Aware bytecode */
+    obinexus_post_processing_output_t *enhanced_output; /**< Enhanced compilation output */
+    
+    /* Integration metadata */
+    struct {
+        obinexus_librift_integration_mode_t mode; /**< Integration mode used */
+        uint32_t enhancement_level;               /**< Level of AST-Aware enhancement */
+        bool fallback_available;                  /**< Whether fallback is available */
+        char *integration_log;                    /**< Integration process log */
+    } integration_info;
+    
+    /* Performance metrics */
+    struct {
+        uint64_t compilation_time_improvement_us; /**< Compilation time improvement */
+        uint32_t runtime_performance_improvement; /**< Runtime performance improvement */
+        size_t memory_usage_reduction_bytes;      /**< Memory usage reduction */
+    } performance_metrics;
+    
+} obinexus_enhanced_librift_pattern_t;
+
+/**
+ * @brief LibRift integration engine
+ */
+typedef struct obinexus_librift_integration_engine {
+    /* Integration configuration */
+    obinexus_librift_integration_mode_t default_mode; /**< Default integration mode */
+    bool enable_automatic_enhancement;                /**< Automatic enhancement for suitable patterns */
+    bool preserve_librift_compatibility;              /**< Maintain LibRift API compatibility */
+    
+    /* System components */
+    obinexus_ast_aware_system_t *ast_aware_system;    /**< AST-Aware compilation system */
+    
+    /* Integration functions */
+    bool (*convert_librift_ast)(const rift_regex_ast_t *librift_ast,
+                               obinexus_librift_ast_adapter_t **adapter);
+    
+    bool (*enhance_librift_pattern)(const rift_regex_pattern_t *librift_pattern,
+                                   obinexus_enhanced_librift_pattern_t **enhanced_pattern);
+    
+    bool (*validate_integration)(const obinexus_enhanced_librift_pattern_t *enhanced_pattern,
+                                char **validation_report);
+    
+    /* Performance optimization */
+    bool (*optimize_for_librift)(obinexus_ast_aware_bytecode_t *bytecode,
+                                const rift_regex_automaton_t *automaton);
+    
+    /* Compatibility functions */
+    rift_regex_pattern_t *(*extract_librift_pattern)(
+        const obinexus_enhanced_librift_pattern_t *enhanced_pattern);
+    
+    rift_regex_automaton_t *(*extract_librift_automaton)(
+        const obinexus_enhanced_librift_pattern_t *enhanced_pattern);
+    
+    /* Statistics and monitoring */
+    struct {
+        uint32_t total_patterns_processed;      /**< Total patterns processed */
+        uint32_t patterns_enhanced;             /**< Patterns successfully enhanced */
+        uint32_t fallback_activations;          /**< Number of fallback activations */
+        double average_enhancement_benefit;     /**< Average enhancement benefit */
+    } statistics;
+    
+} obinexus_librift_integration_engine_t;
+
+/**
+ * @brief LibRift pattern compilation configuration
+ */
+typedef struct obinexus_librift_compilation_config {
+    /* Enhancement preferences */
+    bool prefer_ast_aware_compilation;    /**< Prefer AST-Aware compilation when possible */
+    bool enable_cross_optimization;       /**< Enable cross-system optimizations */
+    uint32_t minimum_enhancement_benefit; /**< Minimum benefit required for enhancement */
+    
+    /* Fallback configuration */
+    bool enable_automatic_fallback;       /**< Enable automatic fallback on failure */
+    uint32_t fallback_timeout_ms;         /**< Timeout before fallback activation */
+    
+    /* LibRift compatibility */
+    bool maintain_api_compatibility;      /**< Maintain LibRift API compatibility */
+    bool preserve_debug_information;      /**< Preserve LibRift debug information */
+    
+    /* Performance targets */
+    uint32_t target_compilation_speedup;  /**< Target compilation speed improvement (%) */
+    uint32_t target_runtime_speedup;      /**< Target runtime speed improvement (%) */
+    uint32_t maximum_memory_overhead;     /**< Maximum acceptable memory overhead (%) */
+    
+} obinexus_librift_compilation_config_t;
+
+/**
+ * @brief Enhanced LibRift matcher with AST-Aware capabilities
+ */
+typedef struct obinexus_enhanced_librift_matcher {
+    /* Traditional LibRift matcher */
+    rift_regex_matcher_t *librift_matcher;       /**< Original LibRift matcher */
+    
+    /* AST-Aware enhancements */
+    obinexus_enhanced_librift_pattern_t *enhanced_pattern; /**< Enhanced pattern */
+    
+    /* Execution mode */
+    enum {
+        OBINEXUS_MATCHER_MODE_LIBRIFT,      /**< Pure LibRift execution */
+        OBINEXUS_MATCHER_MODE_AST_AWARE,    /**< AST-Aware execution */
+        OBINEXUS_MATCHER_MODE_ADAPTIVE      /**< Adaptive mode selection */
+    } execution_mode;
+    
+    /* Performance monitoring */
+    struct {
+        uint64_t total_matches_attempted;     /**< Total match attempts */
+        uint64_t ast_aware_matches;           /**< Matches using AST-Aware path */
+        uint64_t librift_matches;             /**< Matches using LibRift path */
+        double average_match_speedup;         /**< Average match speed improvement */
+    } performance_stats;
+    
+} obinexus_enhanced_librift_matcher_t;
+
+/* Core integration functions */
+
+/**
+ * @brief Create a new LibRift integration engine
+ * @param config Integration configuration
+ * @return New integration engine instance or NULL on failure
+ */
+obinexus_librift_integration_engine_t *
+obinexus_librift_integration_engine_create(
+    const obinexus_librift_compilation_config_t *config);
+
+/**
+ * @brief Compile a LibRift pattern with AST-Aware enhancements
+ * @param engine The integration engine
+ * @param pattern_string The regex pattern string
+ * @param flags LibRift compilation flags
+ * @param enhanced_pattern Output for enhanced pattern
+ * @return true if compilation successful, false otherwise
+ */
+bool
+obinexus_librift_compile_enhanced_pattern(
+    obinexus_librift_integration_engine_t *engine,
+    const char *pattern_string,
+    rift_regex_flags_t flags,
+    obinexus_enhanced_librift_pattern_t **enhanced_pattern);
+
+/**
+ * @brief Create an enhanced matcher from an enhanced pattern
+ * @param enhanced_pattern The enhanced pattern
+ * @param enhanced_matcher Output for enhanced matcher
+ * @return true if creation successful, false otherwise
+ */
+bool
+obinexus_librift_create_enhanced_matcher(
+    const obinexus_enhanced_librift_pattern_t *enhanced_pattern,
+    obinexus_enhanced_librift_matcher_t **enhanced_matcher);
+
+/**
+ * @brief Perform pattern matching with AST-Aware enhancements
+ * @param enhanced_matcher The enhanced matcher
+ * @param input Input string to match
+ * @param input_length Length of input string
+ * @param match_result Output for match result
+ * @return true if matching successful, false otherwise
+ */
+bool
+obinexus_librift_enhanced_match(
+    obinexus_enhanced_librift_matcher_t *enhanced_matcher,
+    const char *input,
+    size_t input_length,
+    rift_regex_match_result_t **match_result);
+
+/**
+ * @brief Validate LibRift compatibility of enhanced pattern
+ * @param enhanced_pattern The enhanced pattern to validate
+ * @param compatibility_report Output for compatibility report
+ * @return Compatibility score (0-100)
+ */
+uint32_t
+obinexus_librift_validate_compatibility(
+    const obinexus_enhanced_librift_pattern_t *enhanced_pattern,
+    char **compatibility_report);
+
+/**
+ * @brief Get integration performance statistics
+ * @param engine The integration engine
+ * @return Performance statistics structure
+ */
+const void *
+obinexus_librift_get_performance_statistics(
+    const obinexus_librift_integration_engine_t *engine);
+
+/**
+ * @brief Free enhanced LibRift pattern resources
+ * @param enhanced_pattern The pattern to free
+ */
+void
+obinexus_enhanced_librift_pattern_free(obinexus_enhanced_librift_pattern_t *enhanced_pattern);
+
+/**
+ * @brief Free enhanced LibRift matcher resources
+ * @param enhanced_matcher The matcher to free
+ */
+void
+obinexus_enhanced_librift_matcher_free(obinexus_enhanced_librift_matcher_t *enhanced_matcher);
+
+/**
+ * @brief Free LibRift integration engine resources
+ * @param engine The engine to free
+ */
+void
+obinexus_librift_integration_engine_free(obinexus_librift_integration_engine_t *engine);
+
+/* Compatibility and conversion functions */
+
+/**
+ * @brief Convert LibRift AST to AST-Aware representation
+ * @param librift_ast LibRift AST to convert
+ * @param ast_adapter Output for AST adapter
+ * @return true if conversion successful, false otherwise
+ */
+bool
+obinexus_convert_librift_ast_to_ast_aware(
+    const rift_regex_ast_t *librift_ast,
+    obinexus_librift_ast_adapter_t **ast_adapter);
+
+/**
+ * @brief Extract LibRift-compatible pattern from enhanced pattern
+ * @param enhanced_pattern Enhanced pattern to extract from
+ * @return LibRift-compatible pattern or NULL on failure
+ */
+rift_regex_pattern_t *
+obinexus_extract_librift_compatible_pattern(
+    const obinexus_enhanced_librift_pattern_t *enhanced_pattern);
+
+/**
+ * @brief Determine optimal integration mode for a pattern
+ * @param pattern_string The regex pattern string
+ * @param flags Compilation flags
+ * @param recommended_mode Output for recommended mode
+ * @return true if recommendation successful, false otherwise
+ */
+bool
+obinexus_librift_recommend_integration_mode(
+    const char *pattern_string,
+    rift_regex_flags_t flags,
+    obinexus_librift_integration_mode_t *recommended_mode);
+
+/* R'' Syntax Integration */
+
+/**
+ * @brief Enhanced R'' syntax compilation with AST-Aware features
+ * @param engine The integration engine
+ * @param r_syntax_pattern R'' syntax pattern string
+ * @param enhanced_pattern Output for enhanced pattern
+ * @return true if compilation successful, false otherwise
+ */
+bool
+obinexus_librift_compile_r_syntax_enhanced(
+    obinexus_librift_integration_engine_t *engine,
+    const char *r_syntax_pattern,
+    obinexus_enhanced_librift_pattern_t **enhanced_pattern);
+
+/**
+ * @brief Validate R'' syntax compatibility with AST-Aware system
+ * @param r_syntax_pattern R'' syntax pattern to validate
+ * @param compatibility_score Output for compatibility score
+ * @return true if validation successful, false otherwise
+ */
+bool
+obinexus_librift_validate_r_syntax_compatibility(
+    const char *r_syntax_pattern,
+    uint32_t *compatibility_score);
+
+#endif /* OBINEXUS_LIBRIFT_INTEGRATION_H */
