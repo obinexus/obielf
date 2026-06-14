@@ -1,486 +1,257 @@
-# OBIELF Universal Part File Architecture: Formal Specification
+# OBIELF Universal Part File Architecture
 
-**Document Version**: 1.0.0  
-**Specification Type**: Mathematical-Computational  
-**Target System**: OBINexus OBIELF Execution Fabric  
-**Date**: August 19, 2025
+**Document version:** 1.1.0
 
----
+**Specification type:** Mathematical and computational
+
+**Target system:** OBINexus OBIELF execution fabric
+
+**Revised:** June 15, 2026
 
 ## Abstract
 
-This document provides a formal specification for the OBIELF (Ontological Binary Infrastructure Execution Fabric) Universal Part File Architecture. The specification defines mathematically rigorous semantics for part file operations, consciousness-aware governance, and universal token execution within distributed ring topologies.
+This document specifies the OBIELF Universal Part File Architecture. It defines
+testable semantics for tokens, part validation, policy decisions, deterministic
+assembly, level-aware registration, bounded streaming, and telemetry.
 
----
+The architecture is an artifact transport and assembly layer. It does not, by
+itself, define an ELF file encoding, linker ABI, executable loader, distributed
+hash ring, or cryptographic trust protocol.
 
-## 1. Mathematical Foundations
+## 1. Terms
 
-### 1.1 Universal Token Triple
+Normative words `MUST`, `MUST NOT`, `SHOULD`, and `MAY` are interpreted as in
+RFC 2119.
 
-**Definition 1.1** (Universal Token): A universal token is a 3-tuple:
+- **Part:** an immutable byte sequence and its metadata.
+- **Assembly:** an ordered concatenation of a complete part sequence.
+- **Validation score:** a bounded policy input in `[0, 1]`.
+- **Integrity score:** a bounded quality input in `[0, 1]`.
+- **Checksum:** an error-detection value computed over bytes.
+- **Ring level:** a local authorization level. This specification does not
+  prescribe a network topology.
 
-```
-T = ⟨τ, ν, μ⟩
-```
+## 2. Universal token
 
-Where:
-- `τ ∈ TokenType` (token classification)
-- `ν ∈ TokenValue` (content representation) 
-- `μ ∈ TokenMemory` (memory binding)
+A universal token is a triple:
 
-**Axiom 1.1** (Token Universality): Every computational artifact in OBIELF can be expressed as a projection of the universal token triple.
-
-### 1.2 Part File Domain
-
-**Definition 1.2** (Part File Set): Let P be the set of all part files:
-
-```
-P = {p | p = ⟨id, index, total, size, offset, final⟩}
-```
-
-Where:
-- `id ∈ GUID` (unique part identifier)
-- `index ∈ ℕ₀` (zero-based part sequence number)
-- `total ∈ ℕ₊` (total expected parts)
-- `size ∈ ℕ₊` (part size in bytes)
-- `offset ∈ ℕ₀` (cumulative byte offset)
-- `final ∈ 𝔹` (final part indicator)
-
-**Invariant 1.1** (Part Sequence): For any part file assembly A = {p₁, p₂, ..., pₙ}:
-
-```
-∀i,j ∈ [1,n] : i ≠ j ⇒ pᵢ.index ≠ pⱼ.index
-∧ ∀i ∈ [1,n] : pᵢ.total = n
-∧ ∃!k ∈ [1,n] : pₖ.final = true ∧ k = n
+```text
+T = <type, value, memory>
 ```
 
----
+`type` classifies the token, `value` contains its payload, and `memory` is a
+finite map of named byte bindings.
 
-## 2. Consciousness Model
+The token representation is an interchange abstraction. Implementations MUST
+NOT assume that all runtime artifacts can be losslessly reconstructed from a
+token unless a concrete encoding is separately specified.
 
-### 2.1 Consciousness Threshold Function
+## 3. Part domain
 
-**Definition 2.1** (Consciousness Level): Let C: P → [0,1] be the consciousness level function:
+A part is:
 
-```c
-typedef struct consciousness_metric {
-    float level;              // ∈ [0.0, 1.0]
-    uint64_t validation_bits; // bit vector
-    time_t assessment_time;   // timestamp
-} consciousness_metric_t;
-
-float compute_consciousness(part_file_t* part) {
-    float base_level = part->integrity_score * part->policy_compliance;
-    float temporal_factor = exp(-α * (current_time() - part->creation_time));
-    return min(1.0, base_level * temporal_factor);
-}
+```text
+p = <id, index, total, size, offset, final, checksum,
+     integrity_score, validation_metric, minimum_ring_level, data>
 ```
 
-**Threshold Constraint**: The consciousness threshold τc = 0.954 must be satisfied:
+The fields have these constraints:
 
-```
-∀p ∈ P : C(p) ≥ τc ⇒ allowed(p)
-```
-
-### 2.2 Consciousness Preservation
-
-**Theorem 2.1** (Consciousness Monotonicity): For part file assembly operations:
-
-```
-∀A ⊆ P : (∀p ∈ A : C(p) ≥ τc) ⇒ C(assemble(A)) ≥ τc
+```text
+total > 0
+0 <= index < total
+size = length(data)
+final <=> index = total - 1
+checksum = CRC32(data)
+0 <= integrity_score <= 1
+0 <= validation_metric.score <= 1
 ```
 
----
+`id` MUST uniquely identify a part within a registry. A checksum detects
+accidental corruption; it is not a cryptographic signature.
 
-## 3. RIFT Governance Specification
+## 4. Complete sequence
 
-### 3.1 Policy Enforcement Matrix
+For a finite assembly set `A`, let `n = |A|`. `complete(A)` holds exactly when:
 
-**Definition 3.1** (Policy State): A policy state is a 4-tuple:
-
-```
-Ψ = ⟨S_old, S_new, Ctx, σ⟩
-```
-
-Where:
-- `S_old, S_new ∈ SystemState` (before/after states)
-- `Ctx ∈ PolicyContext` (execution context)
-- `σ ∈ ℕ₀` (severity level)
-
-**Policy Decision Function**:
-
-```python
-def policy_decision(old_state, new_state, context):
-    """
-    Returns: (allowed: bool, action: str, reason: str)
-    """
-    # Consciousness validation
-    if hasattr(new_state, 'consciousness_level'):
-        if new_state.consciousness_level < 0.954:
-            return (False, "ISOLATE", "consciousness threshold violation")
-    
-    # Part file specific constraints
-    if hasattr(new_state, 'part_count'):
-        if new_state.part_count > MAX_PARTS:
-            return (False, "RESTRICT", "excessive part file count")
-    
-    # Integrity requirements
-    if hasattr(new_state, 'integrity_score'):
-        if new_state.integrity_score < 0.95:
-            return (False, "ISOLATE", "integrity violation")
-    
-    # Severity-based actions
-    severity_map = {
-        range(0, 4):   "ALLOW",
-        range(4, 7):   "LOG", 
-        range(7, 10):  "RESTRICT",
-        range(10, 13): "ISOLATE"
-    }
-    
-    action = next(action for r, action in severity_map.items() 
-                  if context.severity in r)
-    
-    return (True, action, f"severity {context.severity}")
+```text
+n > 0
+forall p in A: p.total = n
+forall i in [0, n): exists exactly one p in A where p.index = i
+exists exactly one p in A where p.final = true
+the final part has index n - 1
+part[0].offset = 0
+forall i in [1, n): part[i].offset =
+    part[i - 1].offset + part[i - 1].size
 ```
 
-### 3.2 Error Isolation Semantics
+Duplicate indices, missing indices, inconsistent totals, invalid final flags,
+and non-contiguous offsets MUST cause assembly failure.
 
-**Axiom 3.1** (Error Containment): Errors do not propagate beyond their generation boundary:
+## 5. Validation and policy
 
-```
-∀e ∈ ErrorSet, b ∈ Boundary : 
-    generate(e, b) ⇒ ¬propagate(e, parent(b))
-```
+The default thresholds are:
 
----
-
-## 4. Part File Assembly Algorithm
-
-### 4.1 Assembly Specification
-
-**Input**: Part prefix string `prefix ∈ String`  
-**Output**: Assembled file `F ∈ File ∪ {⊥}` (⊥ indicates failure)  
-**Precondition**: `∃P' ⊆ P : ∀p ∈ P' : matches(p.id, prefix)`
-
-```c
-typedef struct assembly_result {
-    enum { SUCCESS, FAILURE, TIMEOUT } status;
-    assembled_file_t* file;
-    uint64_t total_size;
-    float integrity_score;
-    consciousness_metric_t consciousness;
-} assembly_result_t;
-
-assembly_result_t assemble_parts(const char* prefix) {
-    // Phase 1: Discovery
-    part_list_t* parts = discover_parts_by_prefix(prefix);
-    if (!parts || parts->count == 0) {
-        return (assembly_result_t){.status = FAILURE};
-    }
-    
-    // Phase 2: Consciousness Validation
-    for (size_t i = 0; i < parts->count; i++) {
-        if (parts->items[i].consciousness_level < CONSCIOUSNESS_THRESHOLD) {
-            log_violation("consciousness", parts->items[i].id);
-            return (assembly_result_t){.status = FAILURE};
-        }
-    }
-    
-    // Phase 3: Sequential Assembly
-    sort_parts_by_index(parts);
-    assembled_file_t* result = allocate_assembled_file(
-        calculate_total_size(parts)
-    );
-    
-    uint64_t current_offset = 0;
-    for (size_t i = 0; i < parts->count; i++) {
-        if (copy_part_data(parts->items[i], result, current_offset) != SUCCESS) {
-            cleanup_assembly(result);
-            return (assembly_result_t){.status = FAILURE};
-        }
-        current_offset += parts->items[i].size;
-    }
-    
-    // Phase 4: Integrity Verification
-    float integrity = compute_integrity_score(result);
-    if (integrity < INTEGRITY_THRESHOLD) {
-        cleanup_assembly(result);
-        return (assembly_result_t){.status = FAILURE};
-    }
-    
-    return (assembly_result_t){
-        .status = SUCCESS,
-        .file = result,
-        .total_size = current_offset,
-        .integrity_score = integrity
-    };
-}
+```text
+validation_threshold = 0.954
+integrity_threshold = 0.95
 ```
 
-### 4.2 Assembly Correctness
+A part is eligible only when:
 
-**Theorem 4.1** (Assembly Completeness): For a valid part set A:
-
-```
-∀A ⊆ P : valid_sequence(A) ∧ (∀p ∈ A : C(p) ≥ τc) 
-    ⇒ ∃F : assemble(A) = F ∧ size(F) = Σ_{p∈A} p.size
+```text
+part.validation_score >= validation_threshold
+and part.integrity_score >= integrity_threshold
 ```
 
-**Proof Sketch**: By construction of the assembly algorithm and invariant preservation.
+The fixed default thresholds are compatibility constants, not scientifically
+derived probabilities. Implementations MAY expose configuration while recording
+the active values in audit output.
 
----
+Severity maps to a policy action:
 
-## 5. Ring Architecture Specification
+| Severity | Action |
+|---:|---|
+| 0-3 | Allow |
+| 4-6 | Log |
+| 7-9 | Restrict |
+| 10-12 | Isolate |
 
-### 5.1 Ring Topology
+Other severity values are invalid. `Allow` and `Log` MAY proceed. `Restrict`
+and `Isolate` MUST fail the requested operation.
 
-**Definition 5.1** (Ring Node): A ring node is defined as:
+## 6. Assembly
 
-```rust
-pub struct RingNode<const LEVEL: usize> {
-    node_id: u64,
-    ring_level: usize,
-    token_registry: HashMap<TokenId, OBIELFToken>,
-    part_registry: HashMap<PartId, PartFileMetadata>,
-    consciousness_threshold: f64,
-    policy_engine: PolicyEngine,
-}
+Given a complete sequence `A`, assembly is:
 
-impl<const LEVEL: usize> RingNode<LEVEL> {
-    pub fn register_part_token(&mut self, part: PartFileToken) 
-        -> Result<(), RingError> {
-        
-        // Consciousness validation
-        if part.consciousness_level < self.consciousness_threshold {
-            return Err(RingError::ConsciousnessViolation);
-        }
-        
-        // Ring-level authorization
-        if !self.can_accept_at_level(LEVEL, &part) {
-            return Err(RingError::InsufficientPrivilege);
-        }
-        
-        // Policy enforcement
-        let policy_result = self.policy_engine.evaluate(&part);
-        match policy_result.action {
-            PolicyAction::Allow => {
-                self.part_registry.insert(part.id, part.metadata);
-                Ok(())
-            },
-            PolicyAction::Restrict | PolicyAction::Isolate => {
-                Err(RingError::PolicyViolation(policy_result.reason))
-            }
-        }
-    }
-}
+```text
+assemble(A) = data(part[0]) || data(part[1]) || ... || data(part[n - 1])
 ```
 
-### 5.2 Ring Lookup Complexity
+where `||` denotes byte concatenation.
 
-**Theorem 5.1** (Logarithmic Lookup): Part file lookup in ring topology achieves O(log n) complexity:
+The implementation MUST:
 
-```
-∀n ∈ ℕ₊, R ∈ RingTopology : |R| = n ⇒ lookup_cost(R) ∈ O(log n)
-```
+1. reject an empty sequence;
+2. enforce configured part-count and part-size limits;
+3. validate each part checksum;
+4. evaluate policy for every part;
+5. validate completeness and contiguous offsets;
+6. sort by index rather than discovery order;
+7. detect arithmetic overflow before allocation;
+8. return the assembled bytes, total size, checksum, minimum integrity score,
+   and minimum validation score.
 
----
+For a valid sequence:
 
-## 6. Streaming Specification
-
-### 6.1 Streaming Semantics
-
-**Definition 6.1** (Stream Segment): A stream segment is:
-
-```c
-typedef struct stream_segment {
-    guid_t part_id;
-    uint64_t offset;
-    uint32_t size;
-    void* data;
-    consciousness_metric_t consciousness;
-    integrity_hash_t hash;
-} stream_segment_t;
-
-stream_segment_t* stream_part_segment(
-    const char* part_id,
-    uint64_t offset,
-    uint32_t size
-) {
-    // Validate segment bounds
-    part_metadata_t* meta = lookup_part_metadata(part_id);
-    if (!meta || offset + size > meta->total_size) {
-        return NULL;
-    }
-    
-    // Load segment with consciousness preservation
-    stream_segment_t* segment = malloc(sizeof(stream_segment_t));
-    segment->data = load_part_data(part_id, offset, size);
-    segment->consciousness = compute_segment_consciousness(segment);
-    
-    // Validate consciousness threshold
-    if (segment->consciousness.level < CONSCIOUSNESS_THRESHOLD) {
-        free_segment(segment);
-        return NULL;
-    }
-    
-    // Compute integrity hash
-    segment->hash = compute_hash(segment->data, size);
-    
-    return segment;
-}
+```text
+length(assemble(A)) = sum(p.size for p in A)
 ```
 
-### 6.2 Streaming Invariants
+Assembly time is `O(n log n + B)`, where `n` is the number of parts and `B` is
+the total byte count. The `n log n` term covers ordered indexing.
 
-**Invariant 6.1** (Consciousness Preservation): 
+## 7. Level-aware registry
 
-```
-∀s ∈ StreamSegment : C(s) ≥ τc
-```
+A registry node parameterized by level `L` MAY accept a part only when:
 
-**Invariant 6.2** (Memory Bounds):
-
-```
-∀s ∈ StreamSegment : s.offset + s.size ≤ parent_part(s).total_size
+```text
+L >= part.minimum_ring_level
 ```
 
----
+Registration MUST also pass validation and policy checks. Registering an
+existing part identifier MUST fail rather than silently replacing metadata.
 
-## 7. Telemetry and Validation
+The reference implementation uses an ordered map, giving `O(log n)` local
+lookup. This does not establish distributed-ring routing complexity.
 
-### 7.1 Telemetry Specification
+## 8. Streaming
 
-```c
-typedef struct part_telemetry_metrics {
-    // Discovery metrics
-    uint64_t parts_discovered;
-    uint64_t parts_registered;
-    uint64_t consciousness_violations;
-    
-    // Assembly metrics  
-    uint64_t assemblies_attempted;
-    uint64_t assemblies_successful;
-    double avg_assembly_time_ms;
-    
-    // Streaming metrics
-    uint64_t segments_streamed;
-    uint64_t bytes_streamed_total;
-    
-    // Quality metrics
-    double avg_consciousness_level;
-    double avg_integrity_score;
-    
-    // Error metrics
-    uint64_t policy_violations;
-    uint64_t integrity_failures;
-} part_telemetry_metrics_t;
+A stream request is `<part, offset, size, max_buffer_size>`.
 
-void update_telemetry(telemetry_event_t event, void* data) {
-    static part_telemetry_metrics_t metrics = {0};
-    
-    switch (event) {
-        case PART_DISCOVERED:
-            metrics.parts_discovered++;
-            break;
-        case ASSEMBLY_COMPLETE: {
-            assembly_result_t* result = (assembly_result_t*)data;
-            metrics.assemblies_attempted++;
-            if (result->status == SUCCESS) {
-                metrics.assemblies_successful++;
-                update_average(&metrics.avg_assembly_time_ms, 
-                              result->assembly_time_ms);
-            }
-            break;
-        }
-        case CONSCIOUSNESS_VIOLATION:
-            metrics.consciousness_violations++;
-            break;
-    }
-}
+It is valid exactly when:
+
+```text
+size <= max_buffer_size
+offset <= part.size
+offset + size <= part.size
 ```
 
-### 7.2 Validation Rules
+The addition MUST be checked for overflow. A successful request returns the
+selected bytes and their checksum. A zero-byte request at end-of-part is valid.
 
-**Rule 7.1** (Part File Integrity): 
+The default maximum buffer target is 10 MiB. Latency depends on storage,
+hardware, and scheduling and therefore cannot be guaranteed by this data model.
 
-```
-∀p ∈ P : checksum(p.data) = p.expected_checksum
-```
+## 9. Telemetry
 
-**Rule 7.2** (Assembly Completeness):
+Telemetry SHOULD include:
 
-```
-∀A ⊆ P : is_complete_sequence(A) ⇔ 
-    (∀i ∈ [0, |A|-1] : ∃p ∈ A : p.index = i) ∧
-    (∃!p ∈ A : p.final = true ∧ p.index = |A|-1)
-```
+- parts discovered;
+- assemblies attempted;
+- assemblies successful;
+- assembly failures;
+- bytes assembled;
+- policy violations.
 
-**Rule 7.3** (Consciousness Monotonicity):
+Counters MUST be safe for concurrent updates. Telemetry MUST NOT alter the
+result of validation or assembly.
 
-```
-∀p₁, p₂ ∈ P : p₁.timestamp < p₂.timestamp ⇒ 
-    C(p₁) ≥ C(p₂) ∨ enhanced(p₂)
-```
+## 10. Safety and liveness
 
----
+### Safety
 
-## 8. Formal Properties
+- No operation may index outside a part's byte sequence.
+- Invalid metadata, checksums, policies, or bounds cause explicit failure.
+- Errors are returned to the caller and do not mutate a completed result.
+- The reference Rust implementation forbids unsafe code.
 
-### 8.1 Safety Properties
+### Liveness
 
-**Property 8.1** (Memory Safety): No part file operation shall access memory outside allocated bounds.
+For finite in-memory input and available memory, validation, assembly, and
+streaming terminate with success or a typed error. This specification makes no
+unbounded network or scheduler progress guarantee.
 
-**Property 8.2** (Consciousness Safety): No operation shall proceed with consciousness level below threshold.
+## 11. Resource limits
 
-**Property 8.3** (Policy Safety): All operations must comply with active governance policies.
+Reference defaults:
 
-### 8.2 Liveness Properties  
+| Resource | Default |
+|---|---:|
+| Maximum part size | 100 MiB |
+| Maximum streaming buffer | 10 MiB |
+| Maximum parts per assembly | 10,000 |
 
-**Property 8.4** (Assembly Progress): Valid part file assemblies shall eventually complete.
+Maximum concurrent assemblies are controlled by the embedding runtime rather
+than the core data model.
 
-**Property 8.5** (Stream Progress): Stream segment requests shall eventually return data or failure.
+## 12. Conformance
 
-### 8.3 Security Properties
+A conforming implementation MUST test:
 
-**Property 8.6** (Isolation): Part file errors do not propagate beyond containment boundaries.
+- a valid single-part sequence;
+- valid out-of-order input;
+- duplicate and missing indices;
+- inconsistent totals and offsets;
+- absent or invalid final parts;
+- checksum corruption;
+- threshold boundary values;
+- policy severity boundaries;
+- registry authorization and duplicate identifiers;
+- streaming at zero, interior, and end boundaries;
+- arithmetic and configured resource limits.
 
-**Property 8.7** (Integrity): Part file assemblies preserve data integrity across operations.
+Performance and reliability percentages are deployment service-level
+objectives. They are not conformance proofs.
 
----
+## 13. Deferred specifications
 
-## 9. Implementation Constraints
+The following require separate normative documents:
 
-### 9.1 Performance Requirements
-
-- Part file lookup: O(log n) complexity
-- Assembly operations: Linear in total part count
-- Streaming latency: ≤ 10ms for segments ≤ 1MB
-- Consciousness validation: ≤ 1ms per part
-
-### 9.2 Resource Constraints
-
-- Maximum concurrent assemblies: 100
-- Maximum part size: 100MB  
-- Maximum streaming buffer: 10MB
-- Consciousness threshold: 0.954 (fixed)
-
-### 9.3 Reliability Requirements
-
-- Assembly success rate: ≥ 99.9%
-- Error isolation: 100%
-- Policy compliance: 100%
-- Data integrity: ≥ 99.99%
-
----
-
-## 10. Conclusion
-
-This formal specification provides mathematically rigorous semantics for the OBIELF Universal Part File Architecture. The specification ensures correctness through formal properties, maintains performance through algorithmic constraints, and enables reliable operation through comprehensive governance mechanisms.
-
-**Verification**: Implementation conformance can be validated against the formal properties, invariants, and constraints defined herein.
-
-**Extension**: Future enhancements must preserve the fundamental properties while potentially extending the token model or consciousness framework.
-
----
-
-*This specification maintains compatibility with OBINexus methodology and enables systematic validation of OBIELF implementations.*
+- OBIELF ELF32/ELF64 binary layout;
+- `.obi.*` section types and encodings;
+- NASM object-format integration;
+- linker and loader behavior;
+- cryptographic signatures and key management;
+- distributed routing and replication;
+- durable on-disk part manifests.

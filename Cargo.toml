@@ -1,0 +1,19 @@
+[package]
+name = "obielf"
+version = "0.1.0"
+edition = "2024"
+description = "Validated part-file assembly primitives for the OBIELF execution fabric"
+license = "MIT"
+repository = "https://github.com/obinexus/obielf"
+
+[lib]
+name = "obielf"
+path = "src/lib.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+
