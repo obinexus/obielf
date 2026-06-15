@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MMUKO-OS • Ring Boot v0.2 • NSIGII Constitutional Layer</title>
+  <style>
+    :root {
+      --burgundy:     #93032e;
+      --burgundy-dim: #5a001a;
+      --prussian:     #001427;
+      --prussian-mid: #00213d;
+      --amber:        #ffc100;
+      --amber-dim:    #8a6800;
+      --vanilla:      #ffeaae;
+      --ebony:        #5f634f;
+      --cyan:         #00e5ff;
+      --cyan-dim:     #007a8a;
+      --green-ok:     #00e87a;
+      --green-dim:    #004d2a;
+      --red-alert:    #ff2244;
+      --orange-warn:  #ff8800;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      overflow: hidden;
+      background: #000;
+      font-family: 'Courier New', monospace;
+      color: var(--cyan);
+      cursor: crosshair;
+    }
+
+    #container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* ── VIDEO ── */
+    #video {
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      filter: contrast(1.3) brightness(0.65) hue-rotate(185deg) saturate(1.4);
+      z-index: 1;
+      transform: scaleX(-1);
+    }
+
+    /* ── CANVAS ── */
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%; height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* ── SCANLINES overlay ── */
+    #scanlines {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.18) 2px,
+        rgba(0,0,0,0.18) 4px
+      );
+    }
+
+    /* ── VIGNETTE ── */
+    #vignette {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center,
+        transparent 40%,
+        rgba(0,0,20,0.7) 100%
+      );
+    }
+
+    /* ── HUD PANEL ── */
+    #hud {
+      position: absolute;
+      top: 20px; left: 20px;
+      z-index: 10;
+      background: rgba(0, 10, 20, 0.92);
+      border: 1px solid var(--burgundy);
+      border-left: 3px solid var(--burgundy);
+      padding: 14px 18px;
+      min-width: 340px;
+      max-width: 380px;
+      backdrop-filter: blur(6px);
+    }
+
+    #hud::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--burgundy), var(--amber), transparent);
+    }
+
+    .hud-title {
+      font-size: 11px;
+      letter-spacing: .18em;
+      color: var(--amber);
+      margin-bottom: 2px;
+    }
+
+    .hud-subtitle {
+      font-size: 10px;
+      letter-spacing: .1em;
+      color: var(--ebony);
+      margin-bottom: 12px;
+      border-bottom: 1px solid #1a2a1a;
+      padding-bottom: 8px;
+    }
+
+    .phase-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 3px 0;
+      font-size: 11px;
+      letter-spacing: .06em;
+      transition: color .3s;
+    }
+
+    .phase-icon { width: 12px; flex-shrink: 0; text-align: center; }
+    .phase-done   .phase-icon { color: var(--green-ok); }
+    .phase-active .phase-icon { color: var(--amber); animation: blink .8s infinite; }
+    .phase-pending .phase-icon { color: var(--ebony); }
+    .phase-done    .phase-label { color: var(--green-ok); }
+    .phase-active  .phase-label { color: var(--amber); }
+    .phase-pending .phase-label { color: #2a4a2a; }
+    .phase-status { margin-left: auto; font-size: 10px; }
+    .phase-done    .phase-status { color: var(--green-ok); }
+    .phase-active  .phase-status { color: var(--amber); animation: blink .8s infinite; }
+    .phase-pending .phase-status { color: #2a3a2a; }
+
+    /* ── DRIFT PANEL ── */
+    #drift-panel {
+      position: absolute;
+      top: 20px; right: 20px;
+      z-index: 10;
+      background: rgba(0,10,20,.92);
+      border: 1px solid var(--cyan-dim);
+      border-right: 3px solid var(--cyan);
+      padding: 12px 16px;
+      min-width: 260px;
+      backdrop-filter: blur(6px);
+      font-size: 11px;
+    }
+
+    #drift-panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan), var(--prussian));
+    }
+
+    .drift-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 0;
+      border-bottom: 1px solid #0a1a0a;
+      letter-spacing: .08em;
+    }
+
+    .drift-label { color: var(--ebony); font-size: 10px; }
+    .drift-value { font-size: 12px; font-weight: bold; }
+    .drift-green  { color: var(--green-ok); }
+    .drift-orange { color: var(--orange-warn); }
+    .drift-red    { color: var(--red-alert); }
+    .drift-cyan   { color: var(--cyan); }
+    .drift-amber  { color: var(--amber); }
+
+    /* ── BOTTOM BAR ── */
+    #bottom-bar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      z-index: 10;
+      background: rgba(0,5,15,.9);
+      border-top: 1px solid var(--burgundy);
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      font-size: 10px;
+      letter-spacing: .1em;
+    }
+
+    .bar-item { display: flex; align-items: center; gap: 6px; }
+    .bar-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .bar-dot.green  { background: var(--green-ok); box-shadow: 0 0 8px var(--green-ok); }
+    .bar-dot.amber  { background: var(--amber);    animation: blink 1.2s infinite; }
+    .bar-dot.red    { background: var(--red-alert); }
+    .bar-dot.cyan   { background: var(--cyan); }
+
+    #tracking-status {
+      position: absolute;
+      bottom: 44px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-align: center;
+      color: var(--cyan);
+      text-shadow: 0 0 12px var(--cyan);
+      transition: opacity .4s;
+    }
+
+    /* ── COUNTDOWN ── */
+    #countdown {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 96px;
+      font-weight: bold;
+      color: var(--amber);
+      text-shadow: 0 0 40px var(--amber), 0 0 80px rgba(255,193,0,.4);
+      z-index: 12;
+      pointer-events: none;
+      display: none;
+      letter-spacing: -.02em;
+    }
+
+    /* ── SUFFERING FORMULA OVERLAY ── */
+    #formula-overlay {
+      position: absolute;
+      bottom: 60px; right: 20px;
+      z-index: 10;
+      font-size: 10px;
+      letter-spacing: .08em;
+      color: var(--ebony);
+      text-align: right;
+      line-height: 1.8;
+    }
+
+    #formula-overlay .formula {
+      color: var(--cyan-dim);
+      font-size: 12px;
+    }
+
+    @keyframes blink { 50% { opacity: .2; } }
+    @keyframes ring-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .6; }
+    }
+    @keyframes flash-commit {
+      0%   { opacity: 0; transform: scale(.9); }
+      30%  { opacity: 1; }
+      100% { opacity: 0; transform: scale(1.05); }
+    }
+
+    /* ── FLASH COMMIT notification ── */
+    #flash-notif {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 15;
+      font-size: 28px;
+      letter-spacing: .2em;
+      color: var(--amber);
+      text-shadow: 0 0 30px var(--amber);
+      pointer-events: none;
+      display: none;
+    }
+
+    /* keyboard hint */
+    #key-hint {
+      position: absolute;
+      bottom: 44px; right: 20px;
+      z-index: 10;
+      font-size: 9px;
+      letter-spacing: .1em;
+      color: #1a3a1a;
+    }
+  </style>
+</head>
+<body>
+<div id="container">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+
+  <!-- ── LEFT HUD ── -->
+  <div id="hud">
+    <div class="hud-title">MMUKO-OS RING BOOT v0.2 ● NSIGII</div>
+    <div class="hud-subtitle" id="hud-subtitle">PHASE: CONSTITUTIONAL LOAD</div>
+    <div id="phases"></div>
+    <div style="margin-top:10px; border-top:1px solid #1a2a1a; padding-top:8px;">
+      <div id="hand-status" style="font-size:10px; letter-spacing:.1em; color:var(--amber)"></div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT DRIFT PANEL ── -->
+  <div id="drift-panel">
+    <div style="font-size:10px; letter-spacing:.14em; color:var(--cyan); margin-bottom:10px; border-bottom:1px solid #0a1a2a; padding-bottom:6px;">NSIGII DRIFT MONITOR</div>
+    <div class="drift-row">
+      <span class="drift-label">V(t) = P(t)−C(t)</span>
+      <span class="drift-value drift-green" id="drift-v">0.000</span>
+    </div>
+    <div class="drift-row">
+      <span class="drift-label">STATE</span>
+      <span class="drift-value drift-green" id="drift-state">GREEN</span>
+    </div>
+    <div class="drift-row">
+      <span class="drift-label">Σ = (N−R)×K</span>
+      <span class="drift-value drift-cyan" id="sigma-val">—</span>
+    </div>
+    <div class="drift-row">
+      <span class="drift-label">TRIPOLAR POLE</span>
+      <span class="drift-value drift-amber" id="pole-val">UCHE</span>
+    </div>
+    <div class="drift-row">
+      <span class="drift-label">LMAC HASH</span>
+      <span class="drift-value drift-cyan" id="lmac-val">PENDING</span>
+    </div>
+    <div class="drift-row">
+      <span class="drift-label">U-POWER ART.</span>
+      <span class="drift-value drift-amber" id="upower-val">D1.CR.AC.1</span>
+    </div>
+    <div class="drift-row">
+      <span class="drift-label">FILTER→FLASH</span>
+      <span class="drift-value drift-green" id="ff-val">FILTER</span>
+    </div>
+    <div class="drift-row">
+      <span class="drift-label">PALM OPEN</span>
+      <span class="drift-value drift-cyan" id="palm-val">SCANNING</span>
+    </div>
+  </div>
+
+  <!-- ── FORMULA ── -->
+  <div id="formula-overlay">
+    <div style="color:var(--ebony); margin-bottom:2px;">OBINexus Constitutional Computing</div>
+    <div class="formula">Σ = (N−R)×K</div>
+    <div class="formula">V(t) = P(t)−C(t)</div>
+    <div class="formula">Rights = 5⁴ = 625</div>
+  </div>
+
+  <!-- ── COUNTDOWN ── -->
+  <div id="countdown">5</div>
+  <div id="flash-notif">◈ FLASH COMMIT ◈</div>
+
+  <!-- ── TRACKING STATUS ── -->
+  <div id="tracking-status">PLACE OPEN PALM ON RING TO ENGAGE</div>
+
+  <!-- ── BOTTOM BAR ── -->
+  <div id="bottom-bar">
+    <div class="bar-item">
+      <div class="bar-dot green"></div>
+      <span style="color:var(--green-ok)">OHA: PUBLIC</span>
+    </div>
+    <div class="bar-item">
+      <div class="bar-dot amber"></div>
+      <span style="color:var(--amber)">IWU: LAW</span>
+    </div>
+    <div class="bar-item">
+      <div class="bar-dot cyan"></div>
+      <span style="color:var(--cyan)">IJI: ORDER</span>
+    </div>
+    <div class="bar-item" style="margin-left:auto;">
+      <div class="bar-dot red"></div>
+      <span style="color:var(--ebony)">obinexus.org</span>
+    </div>
+    <div class="bar-item">
+      <span style="color:var(--ebony)" id="clock-el">—</span>
+    </div>
+  </div>
+
+  <div id="key-hint">[R] RESET &nbsp; [SPACE] ADVANCE &nbsp; [CLICK] OVERRIDE</div>
+</div>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   MMUKO-OS RING BOOT v0.2 — NSIGII Constitutional Layer
+   OBINexus Computing | obinexus.org
+   ═══════════════════════════════════════════════════════ */
+
+const video    = document.getElementById('video');
+const canvas   = document.getElementById('canvas');
+const ctx      = canvas.getContext('2d');
+const clockEl  = document.getElementById('clock-el');
+
+/* ── BOOT STATE MACHINE ── */
+const STATES = { FILTER: 'FILTER', FLASH: 'FLASH', RUNNING: 'RUNNING', DONE: 'DONE' };
+
+const PHASES = [
+  {
+    id: 'P1', label: 'PHASE 1: NEED STATE INIT',
+    nsigii: 'Σ=(N−R)×K evaluation',
+    law: 'Care Act 2014 s.9',
+    pole: 'UCHE', state: STATES.FILTER
+  },
+  {
+    id: 'P2', label: 'PHASE 2: SAFETY SCAN',
+    nsigii: 'DriftVector V(t)=P(t)−C(t)',
+    law: 'HRA 1998 Art.2',
+    pole: 'EZE', state: STATES.FILTER
+  },
+  {
+    id: 'P3', label: 'PHASE 3: IDENTITY CALIBRATION',
+    nsigii: 'Tripolar Bloch sphere resolve',
+    law: 'Mental Capacity Act 2005 s.1',
+    pole: 'OBI', state: STATES.FILTER
+  },
+  {
+    id: 'P4', label: 'PHASE 4: GOVERNANCE CHECK',
+    nsigii: 'OHA/IWU/IJI pillar load',
+    law: 'U-POWER 625-article space',
+    pole: 'UCHE', state: STATES.FLASH
+  },
+  {
+    id: 'P5', label: 'PHASE 5: INTERNAL PROBE',
+    nsigii: 'Tripartite Eulerian Hamiltonian',
+    law: 'Equality Act 2010 s.20',
+    pole: 'EZE', state: STATES.FLASH
+  },
+  {
+    id: 'P6', label: 'PHASE 6: INTEGRITY VERIFICATION',
+    nsigii: 'AuraSeal514 2:1 key sign',
+    law: 'Data Protection Act 2018',
+    pole: 'OBI', state: STATES.RUNNING
+  }
+];
+
+const UPOWERS = [
+  'D1.CR.AC.1','D1.ER.EN.2','D2.SR.RM.3','D3.ECR.ND.4',
+  'D4.ENV.PA.5','D5.CR.AC.2','D1.SR.EN.1','D2.ER.RM.2',
+  'D3.CR.ND.3','D4.SR.PA.4','D5.ECR.AC.5','D1.ENV.EN.1'
+];
+
+const POLES = ['UCHE','EZE','OBI'];
+const DRIFT_STATES = ['GREEN','GREEN','GREEN','ORANGE','GREEN','GREEN','GREEN'];
+
+/* ── RUNTIME STATE ── */
+let bootPhase   = 0;
+let bootDone    = false;
+let trackingMode= false;
+let isHolding   = false;
+let holdStart   = 0;
+let palmCX      = 0, palmCY = 0;
+let ringCX, ringCY;
+let width, height;
+let angle       = 0;
+let driftV      = 0;
+let sigmaVal    = 0;
+let lmacTick    = 0;
+let upowerIdx   = 0;
+let poleIdx     = 0;
+let lastPhaseAt = Date.now();
+let flashActive = false;
+
+/* ── HELPERS ── */
+function isOpenPalm(lm) {
+  if (!lm || lm.length < 21) return false;
+  const fingers = [{tip:8,pip:6},{tip:12,pip:10},{tip:16,pip:14},{tip:20,pip:18}];
+  return fingers.every(f => lm[f.tip].y < lm[f.pip].y - 0.04);
+}
+
+function getPalmCenter(lm) {
+  if (!lm || lm.length < 21) return null;
+  const pts = [0,5,9,13,17];
+  let sx=0, sy=0;
+  pts.forEach(i => { sx += lm[i].x; sy += lm[i].y; });
+  return { x: sx/5, y: sy/5 };
+}
+
+function randHex(len) {
+  return Array.from({length:len}, () => Math.floor(Math.random()*16).toString(16)).join('').toUpperCase();
+}
+
+function resize() {
+  width = canvas.width  = window.innerWidth;
+  height= canvas.height = window.innerHeight;
+  ringCX = width/2;
+  ringCY = height/2;
+}
+
+/* ── DRAW ENGINE ── */
+function drawRing() {
+  ctx.clearRect(0, 0, width, height);
+  const cx = trackingMode ? palmCX : ringCX;
+  const cy = trackingMode ? palmCY : ringCY;
+  const t  = Date.now() / 1000;
+  const p  = bootPhase / PHASES.length;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+
+  /* outer rings — 5 concentric, OBINexus palette */
+  const ringColors = [
+    `rgba(255,193,0,${0.9})`,         // amber — outermost
+    `rgba(147,3,46,${0.7})`,          // burgundy
+    `rgba(0,229,255,${0.85})`,        // cyan
+    `rgba(147,3,46,${0.5})`,          // burgundy mid
+    `rgba(0,229,255,${0.35})`,        // cyan inner
+  ];
+  const ringWidths = [2.5, 1.8, 3.5, 1.2, 0.8];
+  const ringR      = [230, 190, 155, 120, 90];
+
+  ringColors.forEach((col, i) => {
+    ctx.beginPath();
+    ctx.arc(0, 0, ringR[i], 0, Math.PI * 2);
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = ringWidths[i];
+    ctx.shadowBlur  = i === 2 ? 35 : 15;
+    ctx.shadowColor = i === 2 ? 'rgba(0,229,255,.6)' : 'rgba(255,193,0,.3)';
+    ctx.stroke();
+  });
+
+  /* 12 rotating nodes */
+  for (let i = 0; i < 12; i++) {
+    const a    = (i / 12) * Math.PI * 2 + angle * 2.5;
+    const x    = Math.cos(a) * 190;
+    const y    = Math.sin(a) * 190;
+    const done = i < (bootPhase + 1) * 2;
+    const act  = Math.abs(i - (bootPhase * 2)) < 2;
+
+    ctx.shadowBlur  = act ? 30 : 12;
+    ctx.shadowColor = act ? 'rgba(255,193,0,.9)' : 'rgba(0,229,255,.4)';
+    ctx.fillStyle   = act ? '#ffc100' : done ? '#00e87a' : 'rgba(0,229,255,.3)';
+    ctx.beginPath();
+    ctx.arc(x, y, act ? 10 : 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    /* spoke lines */
+    const innerR = ringR[2];
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * innerR, Math.sin(a) * innerR);
+    ctx.lineTo(x * 0.92, y * 0.92);
+    ctx.strokeStyle = act ? 'rgba(255,193,0,.6)' : 'rgba(0,229,255,.12)';
+    ctx.lineWidth = 0.8;
+    ctx.shadowBlur = 0;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  /* ── CENTRAL CORE ── */
+  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 55);
+  coreGrad.addColorStop(0,   `rgba(0,229,255,${0.15 + Math.sin(t*2)*0.05})`);
+  coreGrad.addColorStop(0.6, `rgba(147,3,46,${0.12})`);
+  coreGrad.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, 55, 0, Math.PI * 2);
+  ctx.fillStyle = coreGrad;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 44, 0, Math.PI * 2);
+  ctx.strokeStyle = bootPhase >= 4 ? 'rgba(255,193,0,.9)' : 'rgba(0,229,255,.8)';
+  ctx.lineWidth = 2.5;
+  ctx.shadowBlur  = 40;
+  ctx.shadowColor = bootPhase >= 4 ? 'rgba(255,193,0,.5)' : 'rgba(0,229,255,.5)';
+  ctx.stroke();
+
+  /* core labels */
+  ctx.font = 'bold 10px "Courier New"';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffc100';
+  ctx.shadowBlur = 0;
+  ctx.fillText('QUBIT', cx, cy - 6);
+  ctx.fillStyle = 'rgba(0,229,255,.7)';
+  ctx.fillText('CORE', cx, cy + 8);
+
+  /* FLASH commit ring pulse */
+  if (flashActive) {
+    const pulse = (Math.sin(t * 8) + 1) / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 155 + pulse * 80, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,193,0,${0.6 * pulse})`;
+    ctx.lineWidth   = 3;
+    ctx.shadowBlur  = 60;
+    ctx.shadowColor = '#ffc100';
+    ctx.stroke();
+  }
+
+  /* ── HOLD progress arc ── */
+  if (isHolding) {
+    const elapsed = (Date.now() - holdStart) / 5000;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 155, -Math.PI/2, -Math.PI/2 + elapsed * Math.PI * 2);
+    ctx.strokeStyle = '#ffc100';
+    ctx.lineWidth   = 4;
+    ctx.shadowBlur  = 20;
+    ctx.shadowColor = '#ffc100';
+    ctx.stroke();
+  }
+
+  /* ── rotation ── */
+  angle += bootDone ? 0.004 : 0.008 + bootPhase * 0.002;
+}
+
+/* ── HUD UPDATE ── */
+function updateHUD() {
+  /* phases */
+  const container = document.getElementById('phases');
+  container.innerHTML = PHASES.map((p, i) => {
+    let cls = 'phase-pending';
+    let icon = '○';
+    let status = '→ MAYBE';
+    if (i < bootPhase) { cls = 'phase-done';   icon = '✓'; status = '→ YES'; }
+    if (i === bootPhase && !bootDone) { cls = 'phase-active'; icon = '▶'; status = `→ ${p.state}`; }
+    return `
+      <div class="phase-row ${cls}">
+        <div class="phase-icon">${icon}</div>
+        <div class="phase-label" style="flex:1;">${p.label}</div>
+        <div class="phase-status">${status}</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('hud-subtitle').textContent =
+    bootDone ? 'STATE: RUNNING — CONSTITUTIONAL OS LIVE'
+             : `PHASE: ${PHASES[bootPhase]?.state || 'COMPLETE'}`;
+
+  /* hand status */
+  const hs = document.getElementById('hand-status');
+  if (trackingMode) {
+    hs.innerHTML = '✅ TRACKING MODE ACTIVE &nbsp;|&nbsp; RING FOLLOWS HAND';
+    hs.style.color = 'var(--green-ok)';
+  } else if (isHolding) {
+    hs.innerHTML = '🔥 HOLD OPEN PALM — CONSENSUS FORMING';
+    hs.style.color = 'var(--amber)';
+  } else {
+    hs.innerHTML = '🖐 PLACE OPEN PALM ON RING TO ENGAGE';
+    hs.style.color = 'var(--cyan-dim)';
+  }
+
+  /* tracking status center */
+  const ts = document.getElementById('tracking-status');
+  if (trackingMode) {
+    ts.style.opacity = '0';
+  } else {
+    ts.style.opacity = '1';
+    ts.textContent = isHolding
+      ? `CONSENSUS FORMING — HOLD STEADY`
+      : `PLACE OPEN PALM ON RING TO ENGAGE`;
+  }
+
+  /* drift panel */
+  driftV = Math.sin(Date.now()/3000) * 0.15 + (bootPhase > 3 ? 0.3 : 0.05);
+  sigmaVal = Math.max(0, (bootPhase + 1) * 7 - 3).toFixed(0);
+  upowerIdx = (upowerIdx + (Math.random() < 0.02 ? 1 : 0)) % UPOWERS.length;
+  poleIdx   = (Math.floor(Date.now() / 4000)) % 3;
+
+  const dState = driftV < 0.2 ? 'GREEN' : driftV < 0.4 ? 'ORANGE' : 'RED';
+  const dCls   = dState === 'GREEN' ? 'drift-green' : dState === 'ORANGE' ? 'drift-orange' : 'drift-red';
+
+  document.getElementById('drift-v').textContent      = driftV.toFixed(3);
+  document.getElementById('drift-v').className        = `drift-value ${dCls}`;
+  document.getElementById('drift-state').textContent  = dState;
+  document.getElementById('drift-state').className    = `drift-value ${dCls}`;
+  document.getElementById('sigma-val').textContent    = `${sigmaVal}`;
+  document.getElementById('pole-val').textContent     = POLES[poleIdx];
+  document.getElementById('upower-val').textContent   = UPOWERS[upowerIdx];
+  document.getElementById('ff-val').textContent       = bootPhase < 3 ? 'FILTER' : bootPhase < 5 ? 'FLASH' : 'RUNNING';
+  document.getElementById('palm-val').textContent     = trackingMode ? 'TRACKED' : isHolding ? 'LOCKED' : 'SCANNING';
+
+  /* LMAC hash flicker */
+  lmacTick++;
+  if (lmacTick % 8 === 0) {
+    document.getElementById('lmac-val').textContent = trackingMode
+      ? `0x${randHex(8)}`
+      : 'PENDING';
+  }
+
+  /* clock */
+  const now = new Date();
+  clockEl.textContent = now.toLocaleTimeString('en-GB', {hour12:false}) + ' UTC';
+}
+
+/* ── PHASE ADVANCE ── */
+function advancePhase() {
+  if (bootPhase < PHASES.length - 1) {
+    bootPhase++;
+    lastPhaseAt = Date.now();
+    /* FLASH notification at phase 4 */
+    if (bootPhase === 3 || bootPhase === 4) {
+      triggerFlash();
+    }
+  } else {
+    bootDone = true;
+  }
+}
+
+function triggerFlash() {
+  flashActive = true;
+  const el = document.getElementById('flash-notif');
+  el.style.display = 'block';
+  el.style.animation = 'flash-commit .8s ease-out forwards';
+  setTimeout(() => {
+    el.style.display = 'none';
+    el.style.animation = '';
+    flashActive = false;
+  }, 900);
+}
+
+/* ── AUTO BOOT PROGRESSION ── */
+function maybeAutoAdvance() {
+  if (!bootDone && Date.now() - lastPhaseAt > 6000) {
+    advancePhase();
+  }
+}
+
+/* ── MEDIAPIPE RESULTS ── */
+function onResults(results) {
+  ctx.save();
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    const lm = results.multiHandLandmarks[0];
+
+    /* mirror to match mirrored video */
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.translate(-width, 0);
+
+    if (window.drawConnectors) {
+      drawConnectors(ctx, lm, HAND_CONNECTIONS, {
+        color: 'rgba(0,229,255,.6)',
+        lineWidth: 2.5
+      });
+    }
+    if (window.drawLandmarks) {
+      drawLandmarks(ctx, lm, {
+        color: '#ffc100',
+        lineWidth: 1.5,
+        radius: 3
+      });
+    }
+    ctx.restore();
+
+    /* mirror landmark coords for logic */
+    const mirLm = lm.map(pt => ({...pt, x: 1 - pt.x}));
+    const palm  = getPalmCenter(mirLm);
+
+    if (palm) {
+      palmCX = palm.x * width;
+      palmCY = palm.y * height;
+
+      const open = isOpenPalm(mirLm);
+      const dist = Math.hypot(palmCX - ringCX, palmCY - ringCY);
+
+      if (!trackingMode && open && dist < 140) {
+        if (!isHolding) {
+          isHolding  = true;
+          holdStart  = Date.now();
+          document.getElementById('countdown').style.display = 'block';
+        }
+
+        const elapsed   = (Date.now() - holdStart) / 1000;
+        const remaining = Math.max(0, Math.ceil(5 - elapsed));
+        document.getElementById('countdown').textContent = remaining || '✓';
+
+        if (elapsed >= 5) {
+          trackingMode = true;
+          isHolding    = false;
+          document.getElementById('countdown').style.display = 'none';
+          advancePhase();
+        }
+      } else if (!trackingMode && isHolding) {
+        isHolding = false;
+        document.getElementById('countdown').style.display = 'none';
+      }
+    }
+  } else if (!trackingMode && isHolding) {
+    isHolding = false;
+    document.getElementById('countdown').style.display = 'none';
+  }
+  ctx.restore();
+}
+
+/* ── MAIN LOOP ── */
+function animate() {
+  drawRing();
+  updateHUD();
+  maybeAutoAdvance();
+  requestAnimationFrame(animate);
+}
+
+/* ── INIT ── */
+async function init() {
+  resize();
+
+  try {
+    const hands = new Hands({
+      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
+    });
+    hands.onResults(onResults);
+
+    const cam = new Camera(video, {
+      onFrame: async () => await hands.send({ image: video }),
+      width: 1280, height: 720
+    });
+    await cam.start();
+    console.log('%cMMUKO-OS Ring Boot v0.2 → READY', 'color:#ffc100;font-size:16px;font-weight:bold');
+  } catch (e) {
+    console.warn('Camera/MediaPipe unavailable:', e.message);
+    document.getElementById('hand-status').textContent = 'CAMERA OFFLINE — DEMO MODE ACTIVE';
+  }
+
+  animate();
+}
+
+/* ── INPUT HANDLERS ── */
+document.addEventListener('click', () => {
+  if (!trackingMode) {
+    trackingMode = true;
+    advancePhase();
+  } else {
+    trackingMode = false;
+    ringCX = width/2;
+    ringCY = height/2;
+  }
+});
+
+window.addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'r') {
+    trackingMode = false;
+    bootPhase = 0;
+    bootDone = false;
+    flashActive = false;
+    lastPhaseAt = Date.now();
+    ringCX = width/2;
+    ringCY = height/2;
+  }
+  if (e.key === ' ') {
+    e.preventDefault();
+    advancePhase();
+  }
+});
+
+window.addEventListener('resize', resize);
+init();
+</script>
+</body>
+</html>

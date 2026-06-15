@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MMUKO-OS • Ring Boot • Cybernetic Hand Interface</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Courier New', monospace;
+      color: #0ff;
+    }
+    #container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    #video {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      filter: contrast(1.2) brightness(0.8) hue-rotate(190deg);
+      z-index: 1;
+    }
+    canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+    #hud {
+      position: absolute;
+      top: 20px; left: 20px;
+      z-index: 3;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 15px;
+      border: 1px solid #0ff;
+      border-radius: 4px;
+      font-size: 14px;
+      line-height: 1.5;
+      min-width: 320px;
+    }
+    .phase { margin: 4px 0; }
+    .active { color: #0f0; animation: pulse 1s infinite; }
+    #countdown {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 72px;
+      font-weight: bold;
+      color: #0f0;
+      text-shadow: 0 0 20px #0f0;
+      z-index: 4;
+      pointer-events: none;
+      display: none;
+    }
+    @keyframes pulse { 50% { opacity: 0.6; } }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    
+    <div id="hud">
+      <strong>MMUKO-OS RING BOOT v0.1 • NSIGII</strong><br>
+      <span id="status">INITIALIZING MEMBRANE...</span><br><br>
+      <div id="phases"></div>
+      <div id="hand-status" style="margin-top:10px; color:#ff0; font-size:13px;"></div>
+    </div>
+    
+    <div id="countdown">5</div>
+  </div>
+
+  <!-- MediaPipe CDNs -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const phasesEl = document.getElementById('phases');
+    const handStatusEl = document.getElementById('hand-status');
+    const countdownEl = document.getElementById('countdown');
+
+    let width, height;
+    let angle = 0;
+    let bootPhase = 0;
+    const phases = [
+      "PHASE 1: NEED STATE INIT",
+      "PHASE 2: SAFETY SCAN",
+      "PHASE 3: IDENTITY CALIBRATION",
+      "PHASE 4: GOVERNANCE CHECK",
+      "PHASE 5: INTERNAL PROBE",
+      "PHASE 6: INTEGRITY VERIFICATION"
+    ];
+
+    // Ring Boot control
+    let trackingMode = false;
+    let holdStartTime = 0;
+    let isHolding = false;
+    let palmCenterX = 0;
+    let palmCenterY = 0;
+    let ringCX = 0;   // current ring center (updates in tracking mode)
+    let ringCY = 0;
+
+    // MediaPipe
+    let handsInstance;
+    let cameraInstance;
+
+    // Simple open-palm detection
+    function isOpenPalm(landmarks) {
+      if (!landmarks || landmarks.length < 21) return false;
+      const fingers = [
+        { tip: 4,  pip: 3 },  // thumb (approximate)
+        { tip: 8,  pip: 6 },
+        { tip: 12, pip: 10 },
+        { tip: 16, pip: 14 },
+        { tip: 20, pip: 18 }
+      ];
+      for (let f of fingers) {
+        if (landmarks[f.tip].y > landmarks[f.pip].y + 0.05) return false; // tip below PIP = closed
+      }
+      return true;
+    }
+
+    // Palm center (average of wrist + 4 finger MCPs)
+    function getPalmCenter(landmarks) {
+      if (!landmarks || landmarks.length < 21) return null;
+      let sumX = landmarks[0].x + landmarks[5].x + landmarks[9].x + landmarks[13].x + landmarks[17].x;
+      let sumY = landmarks[0].y + landmarks[5].y + landmarks[9].y + landmarks[13].y + landmarks[17].y;
+      return {
+        x: sumX / 5,
+        y: sumY / 5
+      };
+    }
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+      ringCX = width / 2;
+      ringCY = height / 2;
+    }
+
+    function drawRingBoot() {
+      ctx.clearRect(0, 0, width, height);
+      
+      const cx = trackingMode ? palmCenterX : ringCX;
+      const cy = trackingMode ? palmCenterY : ringCY;
+      const time = Date.now() / 1000;
+
+      // Outer glowing ring
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+
+      for (let i = 0; i < 5; i++) {
+        const radius = 120 + i * 35;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(190, 100%, 70%, ${0.9 - i * 0.18})`;
+        ctx.lineWidth = 9 - i * 1.4;
+        ctx.shadowBlur = 40;
+        ctx.shadowColor = '#0ff';
+        ctx.stroke();
+      }
+
+      // Rotating nodes (12 sectors)
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + angle * 3;
+        const x = Math.cos(a) * 185;
+        const y = Math.sin(a) * 185;
+        ctx.fillStyle = (i % 3 === bootPhase % 3) ? '#0f0' : '#0ff';
+        ctx.shadowBlur = 25;
+        ctx.beginPath();
+        ctx.arc(x, y, 9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Central core (pulsing)
+      ctx.beginPath();
+      ctx.arc(cx, cy, 48, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+      ctx.fill();
+      ctx.strokeStyle = '#0ff';
+      ctx.lineWidth = 8;
+      ctx.shadowBlur = 50;
+      ctx.shadowColor = '#0ff';
+      ctx.stroke();
+    }
+
+    function updateHUD() {
+      const currentPhase = phases[bootPhase % phases.length];
+      statusEl.textContent = currentPhase;
+      statusEl.classList.add('active');
+
+      phasesEl.innerHTML = '';
+      phases.forEach((p, i) => {
+        const div = document.createElement('div');
+        div.className = 'phase';
+        div.innerHTML = i <= bootPhase 
+          ? `✓ <span style="color:#0f0">${p} → YES</span>` 
+          : `○ ${p} → MAYBE`;
+        phasesEl.appendChild(div);
+      });
+
+      // Hand status
+      if (trackingMode) {
+        handStatusEl.innerHTML = `✅ TRACKING MODE ACTIVE<br><span style="color:#0ff">MOVE HAND → RING FOLLOWS</span>`;
+      } else if (isHolding) {
+        handStatusEl.innerHTML = `🔥 HOLD OPEN PALM ON CIRCLE`;
+      } else {
+        handStatusEl.innerHTML = `🖐️ PLACE OPEN PALM ON CIRCLE`;
+      }
+
+      // Auto-progress phases
+      if (Math.random() < 0.07) bootPhase = (bootPhase + 1) % phases.length;
+    }
+
+    function onResults(results) {
+      // Draw hand landmarks (cyan)
+      ctx.save();
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        
+        // Draw connections and landmarks
+        window.drawConnectors(ctx, landmarks, window.HAND_CONNECTIONS, { color: '#0ff', lineWidth: 3 });
+        window.drawLandmarks(ctx, landmarks, { color: '#0ff', lineWidth: 2, radius: 4 });
+
+        const palm = getPalmCenter(landmarks);
+        if (palm) {
+          // Scale normalized coords to canvas
+          palmCenterX = palm.x * width;
+          palmCenterY = palm.y * height;
+
+          const open = isOpenPalm(landmarks);
+          const distToCenter = Math.hypot(palmCenterX - ringCX, palmCenterY - ringCY);
+
+          // Only check hold when NOT in tracking mode
+          if (!trackingMode && open && distToCenter < 110) {
+            if (!isHolding) {
+              isHolding = true;
+              holdStartTime = Date.now();
+              countdownEl.style.display = 'block';
+            }
+            
+            const elapsed = (Date.now() - holdStartTime) / 1000;
+            const remaining = Math.max(0, Math.ceil(5 - elapsed));
+            countdownEl.textContent = remaining;
+            
+            if (elapsed >= 5) {
+              trackingMode = true;
+              isHolding = false;
+              countdownEl.style.display = 'none';
+              handStatusEl.innerHTML = `✅ CONSENSUS REACHED<br>RING BOOT NOW CONTROLLED BY YOUR HAND`;
+            }
+          } else {
+            // Reset hold if palm leaves circle or closes hand
+            if (isHolding) {
+              isHolding = false;
+              countdownEl.style.display = 'none';
+            }
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    function animate() {
+      drawRingBoot();
+      updateHUD();
+      requestAnimationFrame(animate);
+    }
+
+    async function startCyberneticInterface() {
+      resize();
+
+      // Initialize MediaPipe Hands
+      handsInstance = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      handsInstance.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.6,
+        minTrackingConfidence: 0.6
+      });
+
+      handsInstance.onResults(onResults);
+
+      // Start camera + MediaPipe processing
+      cameraInstance = new Camera(video, {
+        onFrame: async () => {
+          await handsInstance.send({ image: video });
+        }
+      });
+
+      await cameraInstance.start();
+      console.log("%cMMUKO-OS Ring Boot → Cybernetic Hand Interface READY", "color:#0ff; font-size:18px");
+    }
+
+    // Click anywhere to manually toggle tracking mode (for testing)
+    document.addEventListener('click', () => {
+      if (!trackingMode) {
+        trackingMode = true;
+        handStatusEl.innerHTML = `✅ MANUAL OVERRIDE<br>RING BOOT CONTROLLED BY HAND`;
+      } else {
+        trackingMode = false;
+        ringCX = width / 2;
+        ringCY = height / 2;
+      }
+    });
+
+    // Keyboard: press 'R' to reset ring to center
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'r') {
+        trackingMode = false;
+        ringCX = width / 2;
+        ringCY = height / 2;
+        handStatusEl.innerHTML = `🔄 RESET TO CENTER`;
+        setTimeout(() => handStatusEl.innerHTML = '', 1500);
+      }
+    });
+
+    window.addEventListener('resize', resize);
+    startCyberneticInterface();
+    animate();
+  </script>
+</body>
+</html>

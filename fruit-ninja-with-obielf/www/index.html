@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Fruit Ninja — MMUKO-OS</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #000;
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* ── Loading ── */
+    #loading {
+      position: fixed; inset: 0;
+      background: #000;
+      color: #0ff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      font-size: 15px;
+      letter-spacing: 5px;
+      z-index: 40;
+    }
+    #load-bar-wrap {
+      width: 220px; height: 3px;
+      background: rgba(0,255,255,0.12);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #load-bar {
+      height: 100%; width: 0%;
+      background: #0ff;
+      box-shadow: 0 0 8px #0ff;
+      transition: width 0.1s;
+    }
+
+    /* ── Boot ── */
+    #boot {
+      position: fixed; inset: 0;
+      z-index: 30;
+      transition: opacity 0.5s ease;
+    }
+    #boot-canvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+    }
+    #boot-hud {
+      position: absolute;
+      top: 20px; left: 20px;
+      color: #0ff;
+      font-size: 12px;
+      line-height: 1.75;
+      background: rgba(0,0,0,0.88);
+      border: 1px solid rgba(0,255,255,0.45);
+      border-radius: 3px;
+      padding: 14px 18px;
+      min-width: 300px;
+      pointer-events: none;
+    }
+    #boot-hud h2 {
+      font-size: 10px;
+      letter-spacing: 2.5px;
+      color: rgba(0,255,255,0.7);
+      margin-bottom: 10px;
+      padding-bottom: 7px;
+      border-bottom: 1px solid rgba(0,255,255,0.25);
+    }
+    .ph          { padding: 1px 0; }
+    .ph-maybe    { color: #ff0; }
+    .ph-active   { color: #ff0; animation: blink 0.9s ease-in-out infinite; }
+    .ph-yes      { color: #0f0; }
+    #boot-outcome {
+      margin-top: 12px;
+      padding-top: 9px;
+      border-top: 1px solid rgba(0,255,0,0.35);
+      font-size: 12px;
+      font-weight: bold;
+      color: #0f0;
+      text-shadow: 0 0 10px #0f0;
+      letter-spacing: 2px;
+      display: none;
+    }
+    #boot-footer {
+      position: absolute;
+      bottom: 20px; right: 20px;
+      font-size: 10px;
+      color: rgba(0,255,255,0.25);
+      letter-spacing: 2px;
+      pointer-events: none;
+    }
+
+    /* ── Ready Screen ── */
+    #ready {
+      position: fixed; inset: 0;
+      z-index: 20;
+      background: #000;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.45s ease;
+      cursor: pointer;
+    }
+    #cam-video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      filter: contrast(1.3) brightness(0.52) hue-rotate(185deg) saturate(1.5);
+      z-index: 1;
+    }
+    #ready-canvas {
+      position: absolute; inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      transform: scaleX(-1);
+    }
+    #ready-scanlines {
+      position: absolute; inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.13) 2px, rgba(0,0,0,0.13) 4px
+      );
+    }
+
+    /* Ready — left HUD panel */
+    #ready-hud {
+      position: absolute;
+      top: 20px; left: 20px;
+      z-index: 10;
+      background: rgba(0,5,15,0.92);
+      border: 1px solid rgba(0,255,255,0.28);
+      border-left: 3px solid #0ff;
+      padding: 12px 16px;
+      min-width: 240px;
+      font-size: 11px;
+      letter-spacing: 2px;
+    }
+    #ready-hud h3 {
+      font-size: 10px;
+      color: #0ff;
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(0,255,255,0.13);
+    }
+    .rh-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(0,255,255,0.05);
+      font-size: 10px;
+    }
+    .rh-label { color: rgba(0,255,255,0.32); }
+    .rh-green { color: #0f0; }
+    .rh-amber { color: #ffc100; animation: blink 0.9s infinite; }
+    .rh-cyan  { color: #0ff; }
+    .rh-dim   { color: rgba(0,255,255,0.25); }
+
+    /* Ready — center instruction */
+    #ready-center {
+      position: absolute;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      text-align: center;
+      pointer-events: none;
+      transition: opacity 0.4s;
+      white-space: nowrap;
+    }
+    #hand-emoji {
+      font-size: 80px;
+      display: block;
+      margin-bottom: 14px;
+      animation: float-hands 1.8s ease-in-out infinite;
+    }
+    @keyframes float-hands {
+      0%,100% { transform: translateY(0) rotate(-6deg); }
+      50%      { transform: translateY(-14px) rotate(6deg); }
+    }
+    #ready-text {
+      font-size: 20px;
+      letter-spacing: 4px;
+      color: #0ff;
+      text-shadow: 0 0 22px #0ff, 0 0 44px rgba(0,255,255,0.25);
+    }
+    #ready-subtext {
+      margin-top: 8px;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: rgba(0,255,255,0.38);
+    }
+
+    /* How-to-play rules strip */
+    #rules-strip {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 28px;
+      pointer-events: none;
+    }
+    .rule-card {
+      background: rgba(0,5,15,0.88);
+      border: 1px solid rgba(0,255,255,0.22);
+      border-top: 2px solid #0ff;
+      padding: 10px 14px;
+      text-align: center;
+      min-width: 100px;
+    }
+    .rule-icon { font-size: 28px; display: block; margin-bottom: 4px; }
+    .rule-text { font-size: 9px; letter-spacing: 1.5px; color: rgba(0,255,255,0.5); line-height: 1.5; }
+    .rule-text strong { color: #0ff; display: block; font-size: 10px; margin-bottom: 2px; }
+
+    /* Skip hint */
+    #skip-hint {
+      position: absolute;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: rgba(0,255,255,0.2);
+      text-align: center;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* ── Big countdown ── */
+    #countdown-big {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      z-index: 12;
+      font-size: clamp(120px, 26vw, 210px);
+      font-weight: bold;
+      color: #ffc100;
+      text-shadow: 0 0 50px #ffc100, 0 0 100px rgba(255,193,0,0.4);
+      display: none;
+      pointer-events: none;
+    }
+    @keyframes pop-in {
+      0%   { transform: translate(-50%,-50%) scale(1.7); opacity: 0; }
+      40%  { opacity: 1; }
+      100% { transform: translate(-50%,-50%) scale(1); }
+    }
+    #countdown-big.pop { animation: pop-in 0.55s cubic-bezier(.22,.8,.44,1.1) forwards; }
+
+    /* SLICE! flash */
+    #slice-flash {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      z-index: 12;
+      font-size: clamp(52px, 13vw, 108px);
+      font-weight: bold;
+      color: #ff3333;
+      letter-spacing: 8px;
+      text-shadow: 0 0 30px #ff0000, 0 0 60px rgba(255,0,0,0.4);
+      display: none;
+      pointer-events: none;
+    }
+    @keyframes slice-anim {
+      0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.65) rotate(-8deg); }
+      25%  { opacity: 1; transform: translate(-50%,-50%) scale(1.12); }
+      100% { opacity: 0; transform: translate(-50%,-50%) scale(1.35); }
+    }
+    #slice-flash.go { animation: slice-anim 0.65s ease-out forwards; }
+
+    @keyframes blink { 50% { opacity: 0.35; } }
+
+    /* ── Game ── */
+    #game {
+      position: fixed; inset: 0;
+      z-index: 10;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+    #game-canvas {
+      position: absolute; inset: 0;
+      display: block;
+    }
+    #hud {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 18px 22px 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+    #score-wrap { display: flex; flex-direction: column; }
+    #score-label {
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: rgba(255,215,0,0.45);
+      margin-bottom: 2px;
+    }
+    #score-display {
+      font-size: 42px;
+      font-weight: bold;
+      color: #ffd700;
+      text-shadow: 0 0 14px rgba(255,215,0,0.45), 2px 2px 6px rgba(0,0,0,0.9);
+      line-height: 1;
+    }
+    #lives-display {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding-top: 6px;
+    }
+    .life-icon {
+      width: 36px; height: 36px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 5px rgba(255,80,80,0.7));
+      transition: opacity 0.3s, filter 0.3s, transform 0.2s;
+    }
+    .life-icon.lost {
+      opacity: 0.12;
+      filter: none;
+      transform: scale(0.84);
+    }
+
+    /* Game Over */
+    #gameover {
+      position: absolute; inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.8);
+      z-index: 5;
+      pointer-events: auto;
+    }
+    #gameover-title {
+      font-size: clamp(38px,9vw,70px);
+      color: #ff3333;
+      text-shadow: 0 0 24px #ff0000, 0 0 50px rgba(255,0,0,0.3);
+      letter-spacing: 6px;
+      margin-bottom: 12px;
+    }
+    #final-score {
+      font-size: clamp(18px,4vw,28px);
+      color: #ffd700;
+      margin-bottom: 50px;
+      letter-spacing: 3px;
+    }
+    #restart-btn {
+      padding: 14px 46px;
+      background: transparent;
+      border: 2px solid #0ff;
+      color: #0ff;
+      font-family: 'Courier New', monospace;
+      font-size: 15px;
+      letter-spacing: 4px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    }
+    #restart-btn:hover, #restart-btn:active {
+      background: #0ff;
+      color: #000;
+      box-shadow: 0 0 22px #0ff;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <span>LOADING ASSETS</span>
+  <div id="load-bar-wrap"><div id="load-bar"></div></div>
+</div>
+
+<!-- Boot -->
+<div id="boot">
+  <canvas id="boot-canvas"></canvas>
+  <div id="boot-hud">
+    <h2>MMUKO-OS v0.1 &bull; NSIGII &bull; Ring Boot</h2>
+    <div id="phase-list"></div>
+    <div id="boot-outcome">&#9654; PASS (0xAA) &mdash; MEMBRANE OPEN</div>
+  </div>
+  <div id="boot-footer">OBINexus Computing &bull; Nnamdi Michael Okpala</div>
+</div>
+
+<!-- Ready — raise both hands -->
+<div id="ready">
+  <video id="cam-video" autoplay playsinline muted></video>
+  <canvas id="ready-canvas"></canvas>
+  <div id="ready-scanlines"></div>
+
+  <!-- Left HUD -->
+  <div id="ready-hud">
+    <h3>HAND CALIBRATION &bull; NSIGII</h3>
+    <div class="rh-row">
+      <span class="rh-label">HANDS DETECTED</span>
+      <span id="rh-count" class="rh-amber">0 / 2</span>
+    </div>
+    <div class="rh-row">
+      <span class="rh-label">LEFT HAND</span>
+      <span id="rh-left" class="rh-dim">&mdash;</span>
+    </div>
+    <div class="rh-row">
+      <span class="rh-label">RIGHT HAND</span>
+      <span id="rh-right" class="rh-dim">&mdash;</span>
+    </div>
+    <div class="rh-row">
+      <span class="rh-label">STATUS</span>
+      <span id="rh-status" class="rh-amber">SCANNING</span>
+    </div>
+  </div>
+
+  <!-- How-to-play cards (top center) -->
+  <div id="rules-strip">
+    <div class="rule-card">
+      <span class="rule-icon">🍎</span>
+      <div class="rule-text"><strong>SLICE FRUITS</strong>Swipe to cut<br>+1 point each</div>
+    </div>
+    <div class="rule-card">
+      <span class="rule-icon">💣</span>
+      <div class="rule-text"><strong>AVOID BOMBS</strong>Hit a bomb =<br>instant game over</div>
+    </div>
+    <div class="rule-card">
+      <span class="rule-icon">❤️</span>
+      <div class="rule-text"><strong>3 LIVES</strong>Miss a fruit =<br>lose one life</div>
+    </div>
+    <div class="rule-card">
+      <span class="rule-icon">✌️</span>
+      <div class="rule-text"><strong>TWO HANDS</strong>Use both fingers<br>to slice more</div>
+    </div>
+  </div>
+
+  <!-- Center instruction -->
+  <div id="ready-center">
+    <span id="hand-emoji">🙌</span>
+    <div id="ready-text">RAISE BOTH HANDS TO BEGIN</div>
+    <div id="ready-subtext">POSITION YOUR HANDS IN CAMERA VIEW &bull; COUNTDOWN STARTS AUTOMATICALLY</div>
+  </div>
+
+  <div id="skip-hint">— or click / press SPACE to skip camera —</div>
+
+  <div id="countdown-big">8</div>
+  <div id="slice-flash">SLICE!</div>
+</div>
+
+<!-- Game -->
+<div id="game">
+  <canvas id="game-canvas"></canvas>
+  <div id="hud">
+    <div id="score-wrap">
+      <div id="score-label">SCORE</div>
+      <div id="score-display">0</div>
+    </div>
+    <div id="lives-display">
+      <img class="life-icon" id="life-0" src="./assets/apple.png" alt="life">
+      <img class="life-icon" id="life-1" src="./assets/apple.png" alt="life">
+      <img class="life-icon" id="life-2" src="./assets/apple.png" alt="life">
+    </div>
+  </div>
+  <div id="gameover">
+    <div id="gameover-title">GAME OVER</div>
+    <div id="final-score">SCORE: 0</div>
+    <button id="restart-btn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<!-- MediaPipe — loaded before game script -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+<script>
+'use strict';
+
+// ============================================================
+// MMUKO-OS Fruit Ninja — www/index.html
+// Serve from project root:  npx serve
+// Open:                     http://localhost:3000/www/
+// ============================================================
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function rand(a, b)    { return a + Math.random() * (b - a); }
+function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
+
+// ── Constants ────────────────────────────────────────────────
+const GRAVITY       = 0.18;
+const FRUIT_RADIUS  = 52;
+const BOMB_RADIUS   = 44;
+const POOL_SIZE     = 32;
+const TRAIL_MAX     = 20;
+const SLICE_HISTORY = 5;
+const SPLASH_FRAMES = 22;
+const BOMB_CHANCE   = 0.07;
+const LIVES_START   = 3;
+const PHASE_MS      = 800;
+
+const PHASE_LABELS = [
+  'PHASE 1 &mdash; NEED_STATE_INIT',
+  'PHASE 2 &mdash; SAFETY_SCAN',
+  'PHASE 3 &mdash; IDENTITY_CALIBRATION',
+  'PHASE 4 &mdash; GOVERNANCE_CHECK',
+  'PHASE 5 &mdash; INTERNAL_PROBE',
+  'PHASE 6 &mdash; INTEGRITY_VERIFICATION',
+];
+
+const FRUITS = ['apple','banana','orange','coconut','pineapple','watermelon'];
+const SPLASH_MAP = {
+  apple:'red', banana:'yellow', orange:'orange',
+  coconut:'transparent', pineapple:'yellow', watermelon:'red',
+};
+
+// ── Asset loading ────────────────────────────────────────────
+const IMG = {};
+const ASSET_KEYS = [
+  'background',
+  'apple','apple_half_1','apple_half_2',
+  'banana','banana_half_1','banana_half_2',
+  'orange','orange_half_1','orange_half_2',
+  'coconut','coconut_half_1','coconut_half_2',
+  'pineapple','pineapple_half_1','pineapple_half_2',
+  'watermelon','watermelon_half_1','watermelon_half_2',
+  'bomb','explosion',
+  'splash_red','splash_orange','splash_yellow','splash_transparent',
+];
+
+function loadImg(key, src) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload  = () => { IMG[key] = img; resolve(); };
+    img.onerror = () => { IMG[key] = null; resolve(); };
+    img.src = src;
+  });
+}
+
+function loadAssets() {
+  const bar = document.getElementById('load-bar');
+  let done = 0;
+  return Promise.all(
+    ASSET_KEYS.map(k =>
+      loadImg(k, `./assets/${k}.png`).then(() => {
+        done++;
+        bar.style.width = `${(done / ASSET_KEYS.length) * 100}%`;
+      })
+    )
+  );
+}
+
+// ── Boot screen ──────────────────────────────────────────────
+const loadingEl   = document.getElementById('loading');
+const bootEl      = document.getElementById('boot');
+const bootCvs     = document.getElementById('boot-canvas');
+const bctx        = bootCvs.getContext('2d');
+const phaseListEl = document.getElementById('phase-list');
+const outcomeEl   = document.getElementById('boot-outcome');
+
+let bootAngle     = 0;
+let bootCompleted = 0;
+let bootRAF       = null;
+
+function resizeBoot() {
+  bootCvs.width  = window.innerWidth;
+  bootCvs.height = window.innerHeight;
+}
+
+function drawRing() {
+  const W = bootCvs.width, H = bootCvs.height;
+  const cx = W / 2, cy = H / 2;
+  bctx.clearRect(0, 0, W, H);
+  bctx.save();
+  bctx.translate(cx, cy);
+
+  for (let i = 0; i < 5; i++) {
+    const r = 100 + i * 28;
+    bctx.beginPath();
+    bctx.arc(0, 0, r, 0, Math.PI * 2);
+    bctx.strokeStyle = `hsla(190,100%,68%,${0.92 - i * 0.16})`;
+    bctx.lineWidth   = 8.5 - i * 1.3;
+    bctx.shadowBlur  = 28;
+    bctx.shadowColor = '#0ff';
+    bctx.stroke();
+  }
+
+  const litCount = Math.round((bootCompleted / 6) * 12);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 + bootAngle * 1.8;
+    const x = Math.cos(a) * 155, y = Math.sin(a) * 155;
+    const lit = i < litCount;
+    bctx.fillStyle   = lit ? '#0f0' : '#0ff';
+    bctx.shadowBlur  = 20;
+    bctx.shadowColor = lit ? '#0f0' : '#0ff';
+    bctx.beginPath();
+    bctx.arc(x, y, 8, 0, Math.PI * 2);
+    bctx.fill();
+  }
+
+  bctx.beginPath();
+  bctx.arc(0, 0, 40, 0, Math.PI * 2);
+  bctx.fillStyle = 'rgba(0,255,255,0.10)';
+  bctx.fill();
+  bctx.strokeStyle = '#0ff';
+  bctx.lineWidth   = 5;
+  bctx.shadowBlur  = 44;
+  bctx.shadowColor = '#0ff';
+  bctx.stroke();
+  bctx.restore();
+
+  if (bootCompleted >= 6) {
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.007);
+    bctx.save();
+    bctx.translate(cx, cy);
+    bctx.strokeStyle = `rgba(0,255,0,${0.25 + pulse * 0.65})`;
+    bctx.lineWidth   = 3 + pulse * 6;
+    bctx.shadowBlur  = 35;
+    bctx.shadowColor = '#0f0';
+    bctx.beginPath();
+    bctx.arc(0, 0, 212, 0, Math.PI * 2);
+    bctx.stroke();
+    bctx.restore();
+  }
+}
+
+function updatePhaseHUD() {
+  phaseListEl.innerHTML = PHASE_LABELS.map((label, i) => {
+    if (i < bootCompleted)
+      return `<div class="ph ph-yes">&#x2713; ${label} &rarr; YES</div>`;
+    if (i === bootCompleted && bootCompleted < 6)
+      return `<div class="ph ph-active">&#x25CB; ${label} &rarr; MAYBE</div>`;
+    return `<div class="ph ph-maybe">&#x25CB; ${label} &rarr; MAYBE</div>`;
+  }).join('');
+}
+
+function bootFrame() {
+  bootAngle += 0.015;
+  drawRing();
+  updatePhaseHUD();
+  bootRAF = requestAnimationFrame(bootFrame);
+}
+
+async function runBoot() {
+  resizeBoot();
+  bootFrame();
+
+  for (let phase = 0; phase < 6; phase++) {
+    await sleep(PHASE_MS * 0.5);
+    bootCompleted = phase + 1;
+    await sleep(PHASE_MS * 0.5);
+  }
+
+  outcomeEl.style.display = 'block';
+  await sleep(520);
+
+  bootEl.style.opacity = '0';
+  await sleep(540);
+  bootEl.style.display = 'none';
+  cancelAnimationFrame(bootRAF);
+
+  runReady();
+}
+
+// ── Ready screen — raise both hands ─────────────────────────
+const readyEl       = document.getElementById('ready');
+const camVideo      = document.getElementById('cam-video');
+const readyCvs      = document.getElementById('ready-canvas');
+const rctx          = readyCvs.getContext('2d');
+const rhCountEl     = document.getElementById('rh-count');
+const rhLeftEl      = document.getElementById('rh-left');
+const rhRightEl     = document.getElementById('rh-right');
+const rhStatusEl    = document.getElementById('rh-status');
+const readyCenterEl = document.getElementById('ready-center');
+const countdownBig  = document.getElementById('countdown-big');
+const sliceFlashEl  = document.getElementById('slice-flash');
+const gameEl        = document.getElementById('game');
+
+let mpCamera   = null;
+let mpHands    = null;
+let cdActive   = false;
+let cdValue    = 8;
+let cdInterval = null;
+
+// Detect 4-finger open palm (index, middle, ring, pinky tips above PIP joints)
+function isOpenPalm(lm) {
+  if (!lm || lm.length < 21) return false;
+  return [[8,6],[12,10],[16,14],[20,18]].every(([tip,pip]) => lm[tip].y < lm[pip].y);
+}
+
+function showCountdownNum(n) {
+  countdownBig.style.display = 'block';
+  countdownBig.textContent   = n;
+  countdownBig.classList.remove('pop');
+  void countdownBig.offsetHeight; // reflow to restart animation
+  countdownBig.classList.add('pop');
+}
+
+function beginCountdown() {
+  if (cdActive) return;
+  cdActive = true;
+  cdValue  = 8;
+  readyCenterEl.style.opacity = '0';
+  rhStatusEl.textContent = 'COUNTDOWN';
+  rhStatusEl.className   = 'rh-green';
+  showCountdownNum(cdValue);
+
+  cdInterval = setInterval(() => {
+    cdValue--;
+    if (cdValue <= 0) {
+      clearInterval(cdInterval);
+      countdownBig.style.display = 'none';
+      sliceFlashEl.classList.add('go');
+      sliceFlashEl.style.display = 'block';
+      setTimeout(endReady, 680);
+    } else {
+      showCountdownNum(cdValue);
+    }
+  }, 1000);
+}
+
+function endReady() {
+  sliceFlashEl.style.display = 'none';
+  countdownBig.style.display = 'none';
+
+  if (mpCamera) {
+    // Camera available: hide the ready-screen UI but keep video + landmark canvas
+    // visible as a live AR background behind the game canvas (which is transparent)
+    ['ready-hud','rules-strip','ready-center','skip-hint','ready-scanlines']
+      .forEach(id => { document.getElementById(id).style.display = 'none'; });
+    readyEl.style.pointerEvents = 'none';
+    readyEl.style.zIndex        = '5'; // behind #game (z-index 10), above body
+    // opacity stays 1 — camera feed shows through transparent game canvas
+  } else {
+    // No camera: fade and hide ready screen completely
+    readyEl.style.opacity       = '0';
+    readyEl.style.pointerEvents = 'none';
+    setTimeout(() => { readyEl.style.display = 'none'; }, 520);
+  }
+
+  gameEl.style.opacity = '1';
+  setTimeout(() => { startGame(); }, 400);
+}
+
+function onHandResults(results) {
+  const hands = results.multiHandLandmarks || [];
+
+  // ── Game mode: draw skeleton + feed blade trails ─────────────
+  if (gameActive) {
+    const W = gameCvs.width, H = gameCvs.height;
+
+    // Draw hand skeleton on readyCvs — visible through transparent game canvas
+    readyCvs.width  = W;
+    readyCvs.height = H;
+    rctx.clearRect(0, 0, W, H);
+    hands.forEach(lm => {
+      if (window.drawConnectors)
+        window.drawConnectors(rctx, lm, window.HAND_CONNECTIONS,
+          { color: 'rgba(0,255,255,0.55)', lineWidth: 2 });
+      if (window.drawLandmarks)
+        window.drawLandmarks(rctx, lm, { color: '#0ff', lineWidth: 1, radius: 4 });
+    });
+
+    // Feed fingertip positions into blade trails
+    const handsFound = [false, false];
+    hands.forEach((lm, i) => {
+      const label    = results.multiHandedness?.[i]?.label || (i === 0 ? 'Right' : 'Left');
+      const trailIdx = label === 'Right' ? 0 : 1;
+      handsFound[trailIdx] = true;
+
+      // readyCvs has CSS scaleX(-1), so draw coords use lm.x directly;
+      // for game canvas trail coords, mirror: sx = (1 - lm.x) * W
+      const tipX = (lm[8].x + lm[12].x) / 2;
+      const tipY = (lm[8].y + lm[12].y) / 2;
+      const sx   = (1 - tipX) * W;
+      const sy   = tipY * H;
+
+      if (!trails[trailIdx].active) {
+        trails[trailIdx].active = true;
+        trails[trailIdx].points = [{ x: sx, y: sy }];
+      } else {
+        trails[trailIdx].points.push({ x: sx, y: sy });
+      }
+    });
+
+    for (let i = 0; i < 2; i++) {
+      if (!handsFound[i]) { trails[i].active = false; trails[i].points = []; }
+    }
+    return;
+  }
+
+  // ── Ready screen mode ───────────────────────────────────────
+  readyCvs.width  = window.innerWidth;
+  readyCvs.height = window.innerHeight;
+  rctx.clearRect(0, 0, readyCvs.width, readyCvs.height);
+
+  const count = hands.length;
+  rhCountEl.textContent = `${count} / 2`;
+  rhCountEl.className   = count >= 2 ? 'rh-green' : 'rh-amber';
+
+  if (count === 0) {
+    rhLeftEl.textContent  = '—'; rhLeftEl.className  = 'rh-dim';
+    rhRightEl.textContent = '—'; rhRightEl.className = 'rh-dim';
+  }
+
+  hands.forEach((lm, i) => {
+    if (window.drawConnectors)
+      window.drawConnectors(rctx, lm, window.HAND_CONNECTIONS, { color: 'rgba(0,255,255,0.5)', lineWidth: 2 });
+    if (window.drawLandmarks)
+      window.drawLandmarks(rctx, lm, { color: '#0ff', lineWidth: 1, radius: 3 });
+
+    const open   = isOpenPalm(lm);
+    const label  = results.multiHandedness?.[i]?.label || (i === 0 ? 'Left' : 'Right');
+    const status = open ? 'OPEN ✓' : 'CLOSED';
+    const cls    = open ? 'rh-green' : 'rh-amber';
+
+    if (label === 'Left') {
+      rhLeftEl.textContent  = status; rhLeftEl.className  = cls;
+    } else {
+      rhRightEl.textContent = status; rhRightEl.className = cls;
+    }
+  });
+
+  if (!cdActive) {
+    if (count >= 2) {
+      rhStatusEl.textContent = 'BOTH HANDS LOCKED';
+      rhStatusEl.className   = 'rh-green';
+      beginCountdown();
+    } else if (count === 1) {
+      rhStatusEl.textContent = 'ONE HAND — RAISE BOTH';
+      rhStatusEl.className   = 'rh-amber';
+    } else {
+      rhStatusEl.textContent = 'SCANNING...';
+      rhStatusEl.className   = 'rh-amber';
+    }
+  }
+}
+
+async function runReady() {
+  readyCvs.width  = window.innerWidth;
+  readyCvs.height = window.innerHeight;
+  readyEl.style.display = 'block';
+  await sleep(40);
+  readyEl.style.opacity = '1';
+
+  // Click / Space fallback — skip camera requirement
+  const onSkip = () => {
+    readyEl.removeEventListener('click', onSkip);
+    window.removeEventListener('keydown', onSkipKey);
+    if (!cdActive) beginCountdown();
+  };
+  const onSkipKey = (e) => {
+    if (e.key === ' ' || e.key === 'Enter') onSkip();
+  };
+  readyEl.addEventListener('click', onSkip);
+  window.addEventListener('keydown', onSkipKey);
+
+  // Try to start MediaPipe camera hand detection
+  try {
+    if (typeof Hands === 'undefined' || typeof Camera === 'undefined')
+      throw new Error('MediaPipe not loaded');
+
+    if (!navigator.mediaDevices?.getUserMedia)
+      throw new Error('getUserMedia not available — open via http://localhost or https://');
+
+    mpHands = new Hands({
+      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
+    });
+    mpHands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.65,
+      minTrackingConfidence: 0.65,
+    });
+    mpHands.onResults(onHandResults);
+
+    mpCamera = new Camera(camVideo, {
+      onFrame: async () => { await mpHands.send({ image: camVideo }); },
+    });
+    await mpCamera.start();
+
+  } catch (err) {
+    console.warn('Camera unavailable:', err.message);
+    document.getElementById('skip-hint').textContent =
+      '— camera unavailable — click or press SPACE to start countdown —';
+    rhStatusEl.textContent = 'NO CAMERA';
+    rhStatusEl.className   = 'rh-dim';
+  }
+}
+
+// ── Game ─────────────────────────────────────────────────────
+const gameCvs    = document.getElementById('game-canvas');
+const gctx       = gameCvs.getContext('2d');
+const scoreEl    = document.getElementById('score-display');
+const gameOverEl = document.getElementById('gameover');
+const finalScEl  = document.getElementById('final-score');
+const lifeEls    = [
+  document.getElementById('life-0'),
+  document.getElementById('life-1'),
+  document.getElementById('life-2'),
+];
+
+let score        = 0;
+let lives        = LIVES_START;
+let frameCount   = 0;
+let nextSpawn    = 55;
+let gameOverFlag = false;
+let gameActive   = false;
+let gameRAF      = null;
+
+// ── Object Pool ───────────────────────────────────────────────
+const pool = Array.from({ length: POOL_SIZE }, () => ({
+  active: false, kind: 'apple', isBomb: false,
+  state: 'whole',
+  x: 0, y: 0, vx: 0, vy: 0, rotation: 0, rotSpeed: 0,
+  h1x:0, h1y:0, h1vx:0, h1vy:0, h1rot:0, h1rs:0,
+  h2x:0, h2y:0, h2vx:0, h2vy:0, h2rot:0, h2rs:0,
+  splashX:0, splashY:0, splashTimer:0, splashKind:'red',
+}));
+
+function acquire() {
+  for (const e of pool) if (!e.active) return e;
+  return null;
+}
+
+// ── Blade trails ──────────────────────────────────────────────
+const trails = [
+  { points: [], active: false, color: 'cyan'   },
+  { points: [], active: false, color: 'orange' },
+];
+const touchMap = new Map();
+
+// ── Spawn ─────────────────────────────────────────────────────
+function spawnWave(W, H) {
+  const n = randInt(1, 3);
+  for (let i = 0; i < n; i++) {
+    const e = acquire();
+    if (!e) continue;
+    const bomb    = Math.random() < BOMB_CHANCE;
+    e.active      = true;
+    e.isBomb      = bomb;
+    e.kind        = bomb ? 'bomb' : FRUITS[randInt(0, FRUITS.length - 1)];
+    e.state       = 'whole';
+    e.x           = rand(W * 0.1, W * 0.9);
+    e.y           = H + 50;
+    e.vx          = rand(-2, 2);
+    e.vy          = rand(-16, -12);
+    e.rotation    = rand(0, Math.PI * 2);
+    e.rotSpeed    = rand(-0.09, 0.09);
+    e.splashTimer = 0;
+  }
+}
+
+// ── Slice ─────────────────────────────────────────────────────
+function sliceEntity(e, sx, sy) {
+  if (e.isBomb) {
+    e.state = 'exploding';
+    e.splashX = sx; e.splashY = sy;
+    e.splashTimer = SPLASH_FRAMES;
+    gameOverFlag  = true;
+    return;
+  }
+  e.state       = 'sliced';
+  e.splashX     = sx; e.splashY = sy;
+  e.splashTimer = SPLASH_FRAMES;
+  e.splashKind  = SPLASH_MAP[e.kind] || 'red';
+  e.h1x = e.x; e.h1y = e.y; e.h1vx = e.vx-3.5; e.h1vy = e.vy*0.65; e.h1rot = e.rotation; e.h1rs = -0.13;
+  e.h2x = e.x; e.h2y = e.y; e.h2vx = e.vx+3.5; e.h2vy = e.vy*0.65; e.h2rot = e.rotation; e.h2rs =  0.13;
+  score++;
+  renderHUD();
+}
+
+function loseLife() {
+  if (lives > 0) lives--;
+  renderHUD();
+  if (lives === 0) gameOverFlag = true;
+}
+
+function renderHUD() {
+  scoreEl.textContent = score;
+  lifeEls.forEach((el, i) => el.classList.toggle('lost', i >= lives));
+}
+
+// ── Collision ─────────────────────────────────────────────────
+function segCircle(p1x, p1y, p2x, p2y, cx, cy, r) {
+  const dx = p2x-p1x, dy = p2y-p1y;
+  const fx = p1x-cx,  fy = p1y-cy;
+  const a  = dx*dx + dy*dy;
+  if (a < 1e-6) return false;
+  const b    = 2*(fx*dx + fy*dy);
+  const c    = fx*fx + fy*fy - r*r;
+  const disc = b*b - 4*a*c;
+  if (disc < 0) return false;
+  const sq = Math.sqrt(disc);
+  const t1 = (-b-sq)/(2*a), t2 = (-b+sq)/(2*a);
+  return (t1>=0&&t1<=1)||(t2>=0&&t2<=1);
+}
+
+function checkCollisions() {
+  for (const trail of trails) {
+    const pts = trail.points;
+    if (pts.length < 2) continue;
+    const start = Math.max(0, pts.length - SLICE_HISTORY - 1);
+    for (let i = start; i < pts.length-1; i++) {
+      for (const e of pool) {
+        if (!e.active || e.state !== 'whole') continue;
+        const r = e.isBomb ? BOMB_RADIUS : FRUIT_RADIUS;
+        if (segCircle(pts[i].x,pts[i].y,pts[i+1].x,pts[i+1].y,e.x,e.y,r))
+          sliceEntity(e,(pts[i].x+pts[i+1].x)/2,(pts[i].y+pts[i+1].y)/2);
+      }
+    }
+  }
+}
+
+// ── Rendering ─────────────────────────────────────────────────
+function spriteAt(img, x, y, rot, size) {
+  if (!img) return;
+  gctx.save();
+  gctx.translate(x, y);
+  gctx.rotate(rot);
+  gctx.drawImage(img, -size/2, -size/2, size, size);
+  gctx.restore();
+}
+
+function drawTrail(trail) {
+  const pts = trail.points;
+  if (pts.length < 2) return;
+  const n = pts.length, cyan = trail.color === 'cyan';
+  gctx.save();
+  for (let i = 1; i < n; i++) {
+    const p0=pts[i-1], p1=pts[i];
+    const t=i/n, w=t*12;
+    const dx=p1.x-p0.x, dy=p1.y-p0.y;
+    const len=Math.hypot(dx,dy)||1;
+    const nx=(-dy/len)*w, ny=(dx/len)*w;
+    gctx.beginPath();
+    gctx.moveTo(p0.x+nx,p0.y+ny);
+    gctx.lineTo(p1.x+nx,p1.y+ny);
+    gctx.lineTo(p1.x-nx,p1.y-ny);
+    gctx.lineTo(p0.x-nx,p0.y-ny);
+    gctx.closePath();
+    gctx.fillStyle = cyan ? `rgba(0,255,255,${t*.78})` : `rgba(255,155,0,${t*.78})`;
+    gctx.fill();
+  }
+  gctx.beginPath();
+  gctx.moveTo(pts[0].x, pts[0].y);
+  for (let i=1;i<n;i++) gctx.lineTo(pts[i].x, pts[i].y);
+  gctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  gctx.lineWidth   = 2;
+  gctx.shadowBlur  = 10;
+  gctx.shadowColor = cyan ? '#0ff' : '#ffa040';
+  gctx.stroke();
+  gctx.restore();
+}
+
+// ── Game loop ─────────────────────────────────────────────────
+function gameLoop() {
+  if (gameOverFlag) { showGameOver(); return; }
+
+  const W = gameCvs.width, H = gameCvs.height;
+  frameCount++;
+
+  for (const e of pool) {
+    if (!e.active) continue;
+    if (e.state === 'whole') {
+      e.vy += GRAVITY; e.x += e.vx; e.y += e.vy; e.rotation += e.rotSpeed;
+      if (e.y > H+120) { e.active = false; if (!e.isBomb) loseLife(); }
+    } else if (e.state === 'sliced') {
+      e.h1vy+=GRAVITY; e.h1x+=e.h1vx; e.h1y+=e.h1vy; e.h1rot+=e.h1rs;
+      e.h2vy+=GRAVITY; e.h2x+=e.h2vx; e.h2y+=e.h2vy; e.h2rot+=e.h2rs;
+      if (e.splashTimer>0) e.splashTimer--;
+      if (e.h1y>H+120 && e.h2y>H+120 && e.splashTimer<=0) e.active = false;
+    } else if (e.state === 'exploding') {
+      if (e.splashTimer>0) e.splashTimer--;
+      else e.active = false;
+    }
+  }
+
+  if (frameCount >= nextSpawn) {
+    spawnWave(W, H);
+    nextSpawn = frameCount + randInt(50, 88);
+  }
+
+  checkCollisions();
+
+  for (const t of trails)
+    if (t.points.length > TRAIL_MAX)
+      t.points.splice(0, t.points.length - TRAIL_MAX);
+
+  // Draw
+  gctx.clearRect(0, 0, W, H);
+
+  if (mpCamera) {
+    // Camera is the background (visible through transparent canvas).
+    // Subtle dark wash improves fruit contrast against a busy camera image.
+    gctx.fillStyle = 'rgba(0,0,0,0.22)';
+    gctx.fillRect(0, 0, W, H);
+  } else if (IMG.background) {
+    gctx.drawImage(IMG.background, 0, 0, W, H);
+  } else {
+    const g = gctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#100600'); g.addColorStop(1,'#000');
+    gctx.fillStyle = g;
+    gctx.fillRect(0,0,W,H);
+  }
+
+  for (const e of pool) {
+    if (!e.active) continue;
+    if (e.state === 'whole') {
+      spriteAt(IMG[e.kind], e.x, e.y, e.rotation, 84);
+    } else if (e.state === 'sliced') {
+      spriteAt(IMG[e.kind+'_half_1'], e.h1x, e.h1y, e.h1rot, 68);
+      spriteAt(IMG[e.kind+'_half_2'], e.h2x, e.h2y, e.h2rot, 68);
+      if (e.splashTimer > 0) {
+        const si = IMG['splash_'+e.splashKind];
+        if (si) {
+          gctx.save();
+          gctx.globalAlpha = e.splashTimer/SPLASH_FRAMES;
+          gctx.drawImage(si, e.splashX-64, e.splashY-64, 128, 128);
+          gctx.restore();
+        }
+      }
+    } else if (e.state === 'exploding') {
+      if (IMG.explosion && e.splashTimer>0) {
+        gctx.save();
+        gctx.globalAlpha = e.splashTimer/SPLASH_FRAMES;
+        gctx.drawImage(IMG.explosion, e.splashX-90, e.splashY-90, 180, 180);
+        gctx.restore();
+      }
+    }
+  }
+
+  for (const t of trails) drawTrail(t);
+  gameRAF = requestAnimationFrame(gameLoop);
+}
+
+function showGameOver() {
+  cancelAnimationFrame(gameRAF);
+  gameActive = false;
+  finalScEl.textContent    = `SCORE: ${score}`;
+  gameOverEl.style.display = 'flex';
+}
+
+function resizeGame() {
+  gameCvs.width  = window.innerWidth;
+  gameCvs.height = window.innerHeight;
+}
+
+function startGame() {
+  resizeGame();
+  score=0; lives=LIVES_START; frameCount=0; nextSpawn=55; gameOverFlag=false; gameActive=true;
+  for (const e of pool) e.active = false;
+  for (const t of trails) { t.points=[]; t.active=false; }
+  touchMap.clear();
+  gameOverEl.style.display = 'none';
+  renderHUD();
+  gameRAF = requestAnimationFrame(gameLoop);
+}
+
+// ── Input ─────────────────────────────────────────────────────
+function claimTrail(id) {
+  if (touchMap.has(id)) return touchMap.get(id);
+  for (let i = 0; i < trails.length; i++) {
+    if (!trails[i].active) {
+      trails[i].active = true; trails[i].points = [];
+      touchMap.set(id, i); return i;
+    }
+  }
+  return -1;
+}
+
+gameCvs.addEventListener('touchstart', ev => {
+  ev.preventDefault();
+  if (gameActive && mpCamera) return; // MediaPipe controls trails during hand-mode
+  for (const t of ev.changedTouches) {
+    const idx = claimTrail(t.identifier);
+    if (idx >= 0) trails[idx].points = [{ x: t.clientX, y: t.clientY }];
+  }
+}, { passive: false });
+
+gameCvs.addEventListener('touchmove', ev => {
+  ev.preventDefault();
+  if (gameActive && mpCamera) return;
+  for (const t of ev.changedTouches) {
+    const idx = touchMap.get(t.identifier);
+    if (idx !== undefined) trails[idx].points.push({ x: t.clientX, y: t.clientY });
+  }
+}, { passive: false });
+
+gameCvs.addEventListener('touchend', ev => {
+  ev.preventDefault();
+  if (gameActive && mpCamera) return;
+  for (const t of ev.changedTouches) {
+    const idx = touchMap.get(t.identifier);
+    if (idx !== undefined) {
+      trails[idx].active = false; trails[idx].points = [];
+      touchMap.delete(t.identifier);
+    }
+  }
+}, { passive: false });
+
+gameCvs.addEventListener('touchcancel', ev => {
+  if (gameActive && mpCamera) return;
+  for (const t of ev.changedTouches) {
+    const idx = touchMap.get(t.identifier);
+    if (idx !== undefined) {
+      trails[idx].active = false; trails[idx].points = [];
+      touchMap.delete(t.identifier);
+    }
+  }
+});
+
+let mouseDown = false;
+gameCvs.addEventListener('mousedown', ev => {
+  if (gameActive && mpCamera) return;
+  mouseDown = true;
+  trails[0].active = true;
+  trails[0].points = [{ x: ev.clientX, y: ev.clientY }];
+});
+gameCvs.addEventListener('mousemove', ev => {
+  if (!mouseDown || (gameActive && mpCamera)) return;
+  trails[0].points.push({ x: ev.clientX, y: ev.clientY });
+});
+window.addEventListener('mouseup', () => {
+  if (!mouseDown) return;
+  mouseDown = false;
+  if (!(gameActive && mpCamera)) {
+    trails[0].active = false;
+    trails[0].points = [];
+  }
+});
+
+document.getElementById('restart-btn').addEventListener('click', startGame);
+
+window.addEventListener('resize', () => {
+  resizeBoot();
+  resizeGame();
+  readyCvs.width  = window.innerWidth;
+  readyCvs.height = window.innerHeight;
+});
+
+// ── Entry ─────────────────────────────────────────────────────
+loadAssets().then(() => {
+  loadingEl.style.display = 'none';
+  runBoot();
+});
+</script>
+</body>
+</html>

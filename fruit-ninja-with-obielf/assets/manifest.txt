@@ -1,0 +1,27 @@
+# Logical resource name = path relative to this directory.
+background.png=background.png
+apple_small.png=apple_small.png
+apple_half_1_small.png=apple_half_1_small.png
+apple_half_2_small.png=apple_half_2_small.png
+banana_small.png=banana_small.png
+banana_half_1_small.png=banana_half_1_small.png
+banana_half_2_small.png=banana_half_2_small.png
+coconut_small.png=coconut_small.png
+coconut_half_1_small.png=coconut_half_1_small.png
+coconut_half_2_small.png=coconut_half_2_small.png
+orange_small.png=orange_small.png
+orange_half_1_small.png=orange_half_1_small.png
+orange_half_2_small.png=orange_half_2_small.png
+pineapple_small.png=pineapple_small.png
+pineapple_half_1_small.png=pineapple_half_1_small.png
+pineapple_half_2_small.png=pineapple_half_2_small.png
+watermelon_small.png=watermelon_small.png
+watermelon_half_1_small.png=watermelon_half_1_small.png
+watermelon_half_2_small.png=watermelon_half_2_small.png
+bomb_small.png=bomb_small.png
+explosion_small.png=explosion_small.png
+splash_red_small.png=splash_red_small.png
+splash_orange_small.png=splash_orange_small.png
+splash_yellow_small.png=splash_yellow_small.png
+splash_transparent_small.png=splash_transparent_small.png
+
