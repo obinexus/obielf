@@ -57,3 +57,9 @@ This release implements the part-file contracts in
 [`docs/obielf_formal_spec.md`](docs/obielf_formal_spec.md). It does not yet
 define a new ELF object-file encoding or a NASM backend. Those require a
 separate byte-level format specification.
+
+## Native SDL example
+
+[`fruit-ninja-with-obielf`](fruit-ninja-with-obielf/) is a playable C11/SDL2
+example. It demonstrates direct resource paths and a checksummed `.obielf`
+resource pack compiled into a linkable static library.
