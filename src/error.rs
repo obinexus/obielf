@@ -1,4 +1,5 @@
 use core::fmt;
+use std::path::PathBuf;
 
 use crate::PartId;
 
@@ -84,6 +85,23 @@ pub enum StreamError {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TargetError {
+    UnknownNasmFormat(String),
+    UnknownArtifactKind(String),
+    InvalidTargetComponent {
+        field: &'static str,
+        value: String,
+    },
+    EmptyArtifactData,
+    MissingParentDirectory(PathBuf),
+    Io {
+        operation: &'static str,
+        path: PathBuf,
+        message: String,
+    },
+}
+
 macro_rules! display_with_debug {
     ($($kind:ty),+ $(,)?) => {
         $(
@@ -103,7 +121,8 @@ display_with_debug!(
     PolicyError,
     AssemblyError,
     RingError,
-    StreamError
+    StreamError,
+    TargetError
 );
 
 impl From<PartError> for AssemblyError {

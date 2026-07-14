@@ -1,7 +1,8 @@
 use obielf::{
-    Assembler, AssemblyError, DefaultPolicyEngine, PartError, PartFile, PartFileToken, PartId,
-    PartMetadata, PolicyAction, PolicyContext, PolicyEngine, PolicyError, RingError, RingNode,
-    StreamError, ValidationMetric, crc32, stream_part_segment,
+    ArtifactKind, Assembler, AssemblyError, DefaultPolicyEngine, NASM_OBIELF32_FORMAT,
+    NASM_OBIELF64_FORMAT, ObiElfFormat, PartError, PartFile, PartFileToken, PartId, PartMetadata,
+    PolicyAction, PolicyContext, PolicyEngine, PolicyError, RingError, RingNode, StreamError,
+    TargetArtifact, TargetLayout, TargetPackage, ValidationMetric, crc32, stream_part_segment,
 };
 
 fn part(id_byte: u8, index: u32, total: u32, offset: u64, data: &[u8]) -> PartFile {
@@ -186,4 +187,88 @@ fn streaming_checks_buffer_and_bounds() {
         Err(StreamError::SegmentOutOfBounds { .. })
     ));
     assert_eq!(stream_part_segment(&source, 6, 0, 3).unwrap().data, b"");
+}
+
+#[test]
+fn nasm_format_names_are_canonical_and_parseable() {
+    assert_eq!(NASM_OBIELF32_FORMAT, "obielf32");
+    assert_eq!(NASM_OBIELF64_FORMAT, "obielf64");
+    assert_eq!(
+        ObiElfFormat::from_nasm_format("obielf32").unwrap(),
+        ObiElfFormat::ObiElf32
+    );
+    assert_eq!(
+        ObiElfFormat::from_nasm_format("OBIELF64").unwrap(),
+        ObiElfFormat::ObiElf64
+    );
+    assert_eq!(ObiElfFormat::ObiElf64.pointer_width_bits(), 64);
+    assert_eq!(ObiElfFormat::ObiElf32.elf_ident_class(), 1);
+}
+
+#[test]
+fn target_layout_separates_executable_object_and_library_outputs() {
+    let layout = TargetLayout::cargo_default("release").unwrap();
+
+    assert_eq!(
+        layout
+            .path_for("kernel", ObiElfFormat::ObiElf64, ArtifactKind::Executable)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/"),
+        "target/obielf/release/obielf64/bin/kernel.obielf64"
+    );
+    assert_eq!(
+        layout
+            .path_for(
+                "kernel",
+                ObiElfFormat::ObiElf64,
+                ArtifactKind::RelocatableObject,
+            )
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/"),
+        "target/obielf/release/obielf64/obj/kernel.obielf64.o"
+    );
+    assert_eq!(
+        layout
+            .path_for(
+                "kernel",
+                ObiElfFormat::ObiElf64,
+                ArtifactKind::StaticLibrary,
+            )
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/"),
+        "target/obielf/release/obielf64/lib/static/libkernel.obielf64.a"
+    );
+    assert!(ArtifactKind::RelocatableObject.is_linkable());
+    assert!(!ArtifactKind::Metadata.is_linkable());
+}
+
+#[test]
+fn writes_package_into_target_directory() {
+    let source = part(1, 0, 1, 0, b"OBIELF");
+    let assembly = Assembler::new(DefaultPolicyEngine::default())
+        .assemble([source])
+        .unwrap();
+    let artifact = TargetArtifact::with_profile(
+        "hello",
+        ObiElfFormat::ObiElf64,
+        ArtifactKind::Executable,
+        "test",
+    )
+    .unwrap();
+    let package = TargetPackage::new(artifact, assembly.data).unwrap();
+    let root = std::env::temp_dir().join(format!(
+        "obielf-target-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    let output = package.write_into(&root).unwrap();
+
+    assert_eq!(std::fs::read(output).unwrap(), b"OBIELF");
 }

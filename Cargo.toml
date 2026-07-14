@@ -2,9 +2,24 @@
 name = "obielf"
 version = "0.1.0"
 edition = "2024"
-description = "Validated part-file assembly primitives for the OBIELF execution fabric"
+rust-version = "1.85"
+authors = ["Nnamdi Michael Okpala / OBINexus Computing"]
+description = "Validated OBIELF part assembly, target packaging, and NASM format identifiers"
 license = "MIT"
 repository = "https://github.com/obinexus/obielf"
+homepage = "https://obinexus.org"
+documentation = "https://docs.rs/obielf"
+readme = "README.md"
+keywords = ["obinexus", "elf", "nasm", "bytecode", "packaging"]
+categories = ["development-tools::build-utils", "encoding"]
+include = [
+    "/Cargo.toml",
+    "/README.md",
+    "/LICENSE",
+    "/src/**/*.rs",
+    "/tests/**/*.rs",
+    "/docs/**/*",
+]
 
 [lib]
 name = "obielf"
