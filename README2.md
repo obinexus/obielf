@@ -88,7 +88,7 @@ readelf -a hello
 - [ ] ELF32 + ELF64 support
 - [ ] Cross-platform build suite (ARM64, RISC-V)
 - [ ] Compiler backend for AST → OBIELF
-- [ ] Integration with `GOSI Aura` for secure signing
+- [ ] Integration with `GOSI` for secure signing
 
 ---
 
